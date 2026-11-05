@@ -32,6 +32,9 @@ step "Frontend: lint"
 step "Frontend: typecheck"
 (cd frontend && npm run typecheck)
 
+step "Frontend: tests"
+(cd frontend && npm test)
+
 step "Frontend: production build"
 (cd frontend && npm run build)
 

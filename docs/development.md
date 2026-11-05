@@ -147,6 +147,9 @@ cd backend && ../.venv/bin/python -m pytest tests/test_auth.py tests/test_refres
 # ML workspace
 cd ml && ../.venv/bin/python -m pytest
 
+# Frontend component tests (Vitest + Testing Library, jsdom)
+cd frontend && npm test
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt
@@ -166,11 +169,16 @@ is not managed by Docker Compose (for example a bare PostgreSQL on `localhost:54
 test has no way to stop and restart that database. Set `NEXA_REQUIRE_COMPOSE_DB=1` to turn that
 skip into a failure; CI sets it so a green pipeline proves the outage path actually ran.
 
-CI runs pytest with `--junitxml` and publishes each suite's report as an artifact
-(`backend-test-results`, `ml-test-results`, `integration-test-results`), then renders any failed,
-errored or skipped cases into the job's run summary, so per-test outcomes are readable without
-access to job logs. The frontend has no test suite; its gate is ESLint, `tsc --noEmit` and the
-production build.
+CI runs every suite with a JUnit reporter and publishes each report as an artifact
+(`backend-test-results`, `ml-test-results`, `frontend-test-results`, `integration-test-results`),
+then renders any failed, errored or skipped cases into the job's run summary, so per-test outcomes
+are readable without access to job logs.
+
+Frontend tests are Vitest component tests (`vitest.config.mts`, jsdom, Testing Library): `Button`
+(variants, sizes, `asChild`, disabled clicks), `AuthForm` (login/signup payloads, API error detail,
+unreachable server) and `HealthStatusPanel` (loading state, healthy rows, unhealthy response,
+refresh). `npm test` runs them; CI adds `--reporter=junit --outputFile=test-results.xml` so the
+report can be published.
 
 ## 6. Verify before pushing
 
@@ -179,7 +187,7 @@ production build.
 ```
 
 Runs the same gates as CI: ruff lint/format, backend + ML tests, PostgreSQL migration SQL
-generation, ESLint, TypeScript, the production build and `docker compose config`.
+generation, ESLint, TypeScript, frontend tests, the production build and `docker compose config`.
 
 ## 7. Frontend notes
 
@@ -188,6 +196,9 @@ generation, ESLint, TypeScript, the production build and `docker compose config`
 - `output: "standalone"` is enabled for the Docker image. `next start` still works but warns about
   it; the container runs `node server.js` from the standalone bundle.
 - Tailwind v4 has no `tailwind.config.js`: tokens live in `src/app/globals.css`.
+- `vitest.config.mts` repeats the `@/*` alias from `tsconfig.json` and loads `vitest.setup.ts`, which
+  registers the jest-dom matchers and unmounts trees between tests. Tests stub `fetch` and
+  `next/navigation` per file, so no component needs a running backend.
 
 ## 8. Troubleshooting
 

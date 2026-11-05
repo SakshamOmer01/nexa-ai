@@ -33,6 +33,18 @@ def _outcome(case: ET.Element) -> tuple[str, str]:
     return "passed", ""
 
 
+def _label(case: ET.Element) -> str:
+    """Return `scope::name`, where scope is the class for pytest and the file for Vitest."""
+    classname = case.get("classname", "")
+    name = case.get("name", "")
+    # Vitest reports the spec file path as the classname, so a dotted split would yield `tsx`.
+    if "/" in classname or classname.endswith((".ts", ".tsx", ".js", ".jsx", ".mts")):
+        scope = classname.rsplit("/", 1)[-1]
+    else:
+        scope = classname.rsplit(".", 1)[-1]
+    return f"{scope}::{name}" if scope else name
+
+
 def _row(status: str, name: str, detail: str) -> str:
     safe = detail.replace("|", "\\|").replace("`", "'")
     return f"| {status} | `{name}` | {safe} |"
@@ -53,8 +65,7 @@ def main(argv: list[str]) -> int:
     results = []
     for case in _cases(ET.parse(report).getroot()):
         status, detail = _outcome(case)
-        classname = case.get("classname", "").rsplit(".", 1)[-1]
-        results.append((status, f"{classname}::{case.get('name', '')}", detail))
+        results.append((status, _label(case), detail))
 
     passed = sum(1 for status, _, _ in results if status == "passed")
     failed = sum(1 for status, _, _ in results if status in ("failed", "errored"))

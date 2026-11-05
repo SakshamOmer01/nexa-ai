@@ -87,7 +87,7 @@ jobs:
         run: python scripts/junit-summary.py --title "Backend tests" backend/test-results.xml >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
-    name: Frontend — lint, typecheck, build
+    name: Frontend — lint, typecheck, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -122,6 +122,29 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      # `default` keeps the readable console log; `junit` feeds the artifact and the run summary.
+      - name: Tests
+        run: npm test -- --reporter=default --reporter=junit --outputFile=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend/test-results.xml
+          if-no-files-found: warn
+
+      # setup-python is not otherwise needed here; it guarantees the `python` the summary script uses.
+      - uses: actions/setup-python@v5
+        if: always()
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Summarize test results
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/junit-summary.py --title "Frontend tests" frontend/test-results.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Production build
         run: npm run build
