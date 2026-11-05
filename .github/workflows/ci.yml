@@ -218,6 +218,10 @@ jobs:
           path: integration-report.xml
           if-no-files-found: warn
 
+      - name: Summarize integration test results
+        if: always()
+        run: python scripts/junit-summary.py integration-report.xml >> "$GITHUB_STEP_SUMMARY"
+
       - name: Container logs
         if: failure()
         run: docker compose logs --no-color --tail=200
