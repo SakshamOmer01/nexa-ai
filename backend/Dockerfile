@@ -3,17 +3,26 @@
 # --- Build the virtualenv ---------------------------------------------------
 FROM python:3.12-slim AS builder
 
-ENV PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /build
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Install runtime dependencies before the source tree is copied: this layer is keyed only on
+# pyproject.toml, so changing application code no longer reinstalls SQLAlchemy/FastAPI/etc. The
+# pip cache mount keeps wheels across rebuilds even when that layer does have to run again.
 COPY pyproject.toml README.md ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt
+
+# The package itself is installed without dependencies (already present above) and is the only
+# layer invalidated by a source change.
 COPY app ./app
-RUN pip install --upgrade pip && pip install .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-deps .
 
 # --- Runtime ----------------------------------------------------------------
 FROM python:3.12-slim AS runtime

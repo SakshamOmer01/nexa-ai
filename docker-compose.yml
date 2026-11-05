@@ -26,6 +26,8 @@ services:
     restart: unless-stopped
 
   backend:
+    # Explicit tag so CI can build once (with a cache) and start the stack with --no-build.
+    image: nexa-ai-backend:local
     build:
       context: ./backend
     environment:
@@ -49,6 +51,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: nexa-ai-frontend:local
     build:
       context: ./frontend
       args:

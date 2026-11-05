@@ -265,7 +265,7 @@ make verify            # everything CI runs
 | Frontend types | `cd frontend && npm run typecheck` | `next typegen` + `tsc --noEmit` |
 | Frontend build | `cd frontend && npm run build` | production standalone build |
 | Integration | `pytest tests` | requires a running stack |
-| Containers | `docker compose config` + CI build | Compose + images |
+| Containers | `docker compose config` + CI buildx build | Compose + cached image builds |
 
 ## Docker
 
@@ -278,6 +278,21 @@ Both images are multi-stage and run as non-root:
 
 Compose orders startup with health conditions: `db` → `backend` (runs migrations) → `frontend`.
 
+### Build-layer caching
+
+Both Dockerfiles are written for BuildKit (the default builder in Docker Engine 23+ and Docker
+Desktop) so a rebuild only redoes the layers that changed:
+
+| Mechanism | Where | Effect |
+| --- | --- | --- |
+| Dependency/source split | `backend/Dockerfile` installs the `pyproject.toml` dependencies first, then the package with `--no-deps` | editing `app/` no longer reinstalls FastAPI, SQLAlchemy, asyncpg or uvicorn |
+| Lockfile-first install | `frontend/Dockerfile` `deps` stage copies only `package.json` + `package-lock.json` | the `npm ci` layer survives application changes |
+| Cache mounts | pip `/root/.cache/pip`, npm `/root/.npm`, Turbopack `/app/.next/cache` | downloads and incremental build state persist between builds and are never copied into the image |
+| Explicit image tags | `nexa-ai-backend:local`, `nexa-ai-frontend:local` in `docker-compose.yml` | CI builds each image once, then starts the stack with `--no-build` |
+
+`docker compose build` behaves exactly as before — it is only faster on the second run. Set
+`DOCKER_BUILDKIT=1` if you run an older engine where BuildKit is not the default.
+
 ## CI/CD
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests and pushes to `main`:
@@ -285,9 +300,17 @@ Compose orders startup with health conditions: `db` → `backend` (runs migratio
 | Job | Verifies |
 | --- | --- |
 | `backend` | ruff, migrations applied to a real PostgreSQL 17 service, app import, pytest |
-| `frontend` | npm ci, ESLint, typecheck, production build |
+| `frontend` | npm ci, ESLint, typecheck, production build (with a restored `.next` build cache) |
 | `ml` | ruff, pytest |
-| `integration` | `docker compose config`, image builds, stack startup, health gate, cross-service tests |
+| `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests |
+
+The container job is the one that used to rebuild from scratch on every run. It now builds both
+images with `docker/build-push-action` on a `docker/setup-buildx-action` builder and exports the
+layers to the GitHub Actions cache (`type=gha`, `mode=max`, one scope per image). A run that only
+touches application code reuses the dependency layers, so the stack starts from warm images; the
+compose stack is then started with `--no-build` so nothing is compiled twice. Caches are scoped per
+branch and are subject to GitHub's 10 GB repository limit; the two scopes are independent, so a
+ejected frontend layer never invalidates the backend's.
 
 Deployment is intentionally not wired to an environment yet; the images and probes are ready for any
 orchestrator.
@@ -314,21 +337,26 @@ Delivered:
 - Email/password accounts with Argon2id hashing, short-lived JWT access tokens and a signed-in web
   session behind an httpOnly-cookie BFF.
 - Rotating, digest-stored refresh tokens with per-login families, reuse detection and revocation on
-  logout — sessions survive access-token expiry without long-lived JWTs.
+  logout — sessions survive access-token expiry without long-lived JWTs. Each login has its own
+  family, so signing out of one browser does not touch another; the family is the session boundary.
+- Cache-friendly images and a cached container pipeline: dependency/source layer split, BuildKit
+  cache mounts and a GitHub Actions layer cache shared by both images.
 
-Next:
+Next (see [docs/roadmap.md](docs/roadmap.md) for the detailed status):
 
 - Login/refresh rate limiting, email verification and password reset
-- Multi-tenant workspaces, API keys and a per-device session management UI
+- Device metadata for sessions plus a session list/revoke UI (families exist, device labels do not)
+- Multi-tenant workspaces and API keys
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
 - OpenTelemetry traces/metrics, alerting on readiness failures
-- Background jobs for ingestion and long-running inference
+- Background jobs for ingestion and long-running inference, plus refresh-token cleanup
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
 - [Development guide](docs/development.md)
+- [Roadmap and known gaps](docs/roadmap.md)
 - [ADR 0001 — Monorepo foundation](docs/adr/0001-monorepo-architecture.md)
 - [ADR 0002 — JWT authentication](docs/adr/0002-jwt-authentication.md)
 - [ADR 0003 — Refresh-token rotation](docs/adr/0003-refresh-token-rotation.md)

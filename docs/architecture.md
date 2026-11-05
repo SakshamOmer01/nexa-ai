@@ -100,8 +100,29 @@ environment with `.env` files for local development only.
 
 - Backend: `SECRET_KEY`, `DATABASE_URL`, `CORS_ORIGINS`, pool sizes, log level.
 - Frontend: `NEXT_PUBLIC_*` (inlined at build time) and the server-only `API_INTERNAL_URL`.
-- Production guards: placeholder secrets, `DEBUG=true`, wildcard CORS and non-HTTPS origins are
-  rejected when `ENVIRONMENT=production`.
+- Production guards: placeholder or short `SECRET_KEY`s, `DEBUG=true` and wildcard CORS are
+  rejected when `ENVIRONMENT=production`. Serve the stack over HTTPS yourself (a proxy or the
+  platform's TLS terminator); the app validates the origin list but does not enforce a scheme.
+- `.env` files exist for local development only; in a deployed environment every value comes from
+  the process environment or the platform secret store.
+
+## Build and delivery
+
+Two multi-stage images and one compose file, with caching treated as part of the design:
+
+| Concern | Decision |
+| --- | --- |
+| Image shape | `deps`/`builder`/`runner` stages; the runtime images carry no toolchain and run as uid 1001 |
+| Dependency layers | `backend/Dockerfile` installs `pyproject.toml` dependencies before copying `app/`, then installs the package with `--no-deps`; the frontend `deps` stage copies only the lockfile pair |
+| Build cache mounts | BuildKit cache mounts for pip, npm and Turbopack's `.next/cache`; they speed up rebuilds and never enter the image |
+| Image naming | `docker-compose.yml` tags the services `nexa-ai-backend:local` / `nexa-ai-frontend:local` so a pre-built image can be started with `docker compose up --no-build` |
+| CI container pipeline | `.github/workflows/ci.yml` builds with `docker/build-push-action` on a buildx builder and exports layers to the GitHub Actions cache (`type=gha`, `mode=max`, separate `backend`/`frontend` scopes) |
+| Startup order | compose health conditions: `db` → `backend` (runs `alembic upgrade head`) → `frontend` |
+
+Cache invalidation follows the inputs, not the clock: a `pyproject.toml` change rebuilds the backend
+dependency layer, a lockfile change rebuilds `node_modules`, and an application change rebuilds only
+the small final layers. Because the CI job exports layers instead of tags, no registry credentials
+are needed.
 
 ## Observability
 
@@ -134,6 +155,8 @@ Rules:
 | Rotation | Every refresh revokes the presented row and issues a successor in the same family |
 | Reuse detection | Replay beyond a 30-second concurrency grace revokes the whole family |
 | Revocation | Logout revokes the family immediately; access JWTs still expire on their own |
+| Session boundary | One refresh-token family per login; logging out revokes that family only, so two browsers stay independent |
+| Device metadata | Not stored yet: a session can be identified by family id and timestamps, not by a device label; listing/revoking individual sessions is a roadmap item |
 | Token transport | httpOnly, SameSite=Lax cookies owned by the web tier; `Secure` when the site URL is https |
 | Validation | `get_current_user` checks signature, expiry, token type and an active user row |
 | Error shape | Single `401` for every credential failure; `409` for duplicate emails; `422` for input |

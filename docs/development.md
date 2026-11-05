@@ -65,6 +65,25 @@ docker compose up --build
 # API: http://localhost:8000/health   Web: http://localhost:3000
 ```
 
+#### Docker build cache
+
+Both Dockerfiles rely on BuildKit layer caching plus cache mounts:
+
+- `backend/Dockerfile` installs the `pyproject.toml` dependencies in their own layer (before `app/`
+  is copied) and then installs the package with `--no-deps`, so editing code does not reinstall
+  FastAPI/SQLAlchemy. The pip cache mount keeps wheels between builds.
+- `frontend/Dockerfile` copies `package.json` + `package-lock.json` into a `deps` stage, so `npm ci`
+  is reused until the lockfile changes; the Turbopack `.next/cache` directory is a cache mount, which
+  makes a rebuild after a source change incremental instead of a full compile.
+- Cache mounts are not part of the image and are not shared between machines; CI gets cross-run
+  reuse from the GitHub Actions layer cache instead (see `.github/workflows/ci.yml`).
+- Images are tagged `nexa-ai-backend:local` / `nexa-ai-frontend:local`, so CI builds once and runs
+  `docker compose up -d --no-build`. Locally, `docker compose build` (or `up --build`) still builds
+  and tags the same names.
+
+BuildKit is the default in Docker Engine 23+ and Docker Desktop. On an older engine, export
+`DOCKER_BUILDKIT=1`.
+
 ### Try authentication
 
 ```bash
@@ -166,6 +185,8 @@ generation, ESLint, TypeScript, the production build and `docker compose config`
 | CORS error in the browser | Add the exact origin to `CORS_ORIGINS` (scheme + host + port). |
 | Frontend health shows `backend-api: down` | `API_INTERNAL_URL` (Docker) or the backend process is unreachable. |
 | `port is already allocated` | Another stack is running: `docker compose down` or change `*_PORT` values in `.env`. |
+| Compose starts an old image after a Dockerfile change | The `nexa-ai-*:local` tags persist. Rebuild with `docker compose build` (or `up --build`); `--no-build` deliberately never compiles. |
+| `docker compose build` ignores a `RUN --mount=type=cache` line | BuildKit is disabled. Export `DOCKER_BUILDKIT=1`; the legacy builder does not support cache mounts. |
 | `ModuleNotFoundError: app` | Use the venv binaries (`../.venv/bin/...`) or activate `.venv`. |
 | Production start fails with a secret error | Set a unique `SECRET_KEY` of 32+ characters and `DEBUG=false`. |
 | `401` from `/api/v1/auth/me` | The token is missing, expired, signed with another key, or the account is inactive. Sign in again. |

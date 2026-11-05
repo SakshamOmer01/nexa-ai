@@ -89,6 +89,10 @@ export const roadmap: RoadmapItem[] = [
     status: "shipped",
   },
   {
+    label: "CI/CD with cached container builds and cross-service integration gates",
+    status: "shipped",
+  },
+  {
     label: "Multi-tenant workspaces, per-device session management and login rate limiting",
     status: "next",
   },

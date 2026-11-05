@@ -5,7 +5,10 @@ FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# The npm cache mount survives rebuilds, so a lockfile change re-downloads less; the layer itself
+# is still keyed only on package.json + package-lock.json.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # --- Build ------------------------------------------------------------------
 FROM node:22-alpine AS builder
@@ -24,7 +27,12 @@ ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME \
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+
+# Turbopack's incremental build cache lives in .next/cache (~44 MB on a cold build). Keeping it in
+# a cache mount makes rebuilds after a source change incremental instead of a full recompile.
+# It is never part of the image: only .next/standalone and .next/static are copied to the runtime.
+RUN --mount=type=cache,target=/app/.next/cache \
+    npm run build
 
 # --- Runtime ----------------------------------------------------------------
 FROM node:22-alpine AS runner
