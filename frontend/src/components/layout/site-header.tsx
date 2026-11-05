@@ -1,6 +1,8 @@
 import { GitBranch } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
+import { AuthNav } from "@/components/auth/auth-nav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/config/site";
@@ -34,7 +36,17 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
+          <Suspense
+            fallback={
+              <span
+                className="h-7 w-28 animate-pulse rounded-md bg-muted/60"
+                aria-hidden
+              />
+            }
+          >
+            <AuthNav />
+          </Suspense>
+          <Button variant="ghost" size="sm" asChild className="hidden lg:inline-flex">
             <Link href={siteConfig.apiDocsUrl} target="_blank" rel="noreferrer">
               API docs
             </Link>

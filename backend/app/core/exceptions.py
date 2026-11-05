@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -78,7 +79,28 @@ def error_payload(code: str, detail: str) -> dict[str, Any]:
     return {"error": {"code": code, "detail": detail}, "request_id": get_request_id()}
 
 
+def _validation_detail(errors: list[dict[str, Any]]) -> str:
+    """Summarise the first validation failure without echoing the submitted value.
+
+    Request bodies can contain passwords, so only the field location and the validator's message
+    are surfaced — never ``input``.
+    """
+    if not errors:
+        return "Request validation failed."
+    first = errors[0]
+    location = ".".join(str(part) for part in first.get("loc", ()) if part != "body")
+    message = str(first.get("msg", "Invalid value."))
+    return f"{location}: {message}" if location else message
+
+
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def _handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content=error_payload("validation_error", _validation_detail(exc.errors())),
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         code = _HTTP_ERROR_CODES.get(exc.status_code, "http_error")

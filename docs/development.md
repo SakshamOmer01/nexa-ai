@@ -37,6 +37,14 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Frontend `NEXT_PUBLIC_*` values are inlined into the browser bundle at build time — never put a
 secret behind that prefix. Server-side code reads `API_INTERNAL_URL` instead of the public URL.
 
+Authentication settings:
+
+- `SECRET_KEY` signs JWTs. Rotating it immediately invalidates every access token.
+- `ACCESS_TOKEN_EXPIRE_MINUTES` controls how long a session and its cookie last.
+- The web tier marks the session cookie `Secure` when `NEXT_PUBLIC_SITE_URL` starts with `https`.
+  Keep it on `http://localhost:3000` for local development so the cookie is accepted over http.
+- Signup requires a password of 8–128 characters; emails are stored lower-cased.
+
 ## 3. Run everything
 
 ```bash
@@ -54,6 +62,21 @@ Or run the whole stack in containers:
 docker compose up --build
 # API: http://localhost:8000/health   Web: http://localhost:3000
 ```
+
+### Try authentication
+
+```bash
+# API directly
+curl -s -X POST localhost:8000/api/v1/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ada@example.com","password":"correct-horse-battery"}'
+
+# Or use the app: http://localhost:3000/signup → /dashboard
+```
+
+The browser flow goes through `/api/auth/signup` and `/api/auth/login`, which store the token in an
+httpOnly cookie and return only the public user. Open `/dashboard` while signed out to see the
+redirect to `/login`.
 
 ### Run services individually
 
@@ -86,6 +109,9 @@ cd backend
 ```bash
 # Backend unit/contract tests (no database required — in-memory SQLite)
 cd backend && ../.venv/bin/python -m pytest
+
+# Auth only
+cd backend && ../.venv/bin/python -m pytest tests/test_auth.py
 
 # ML workspace
 cd ml && ../.venv/bin/python -m pytest
@@ -127,6 +153,10 @@ generation, ESLint, TypeScript, the production build and `docker compose config`
 | `port is already allocated` | Another stack is running: `docker compose down` or change `*_PORT` values in `.env`. |
 | `ModuleNotFoundError: app` | Use the venv binaries (`../.venv/bin/...`) or activate `.venv`. |
 | Production start fails with a secret error | Set a unique `SECRET_KEY` of 32+ characters and `DEBUG=false`. |
+| `401` from `/api/v1/auth/me` | The token is missing, expired, signed with another key, or the account is inactive. Sign in again. |
+| Signed in, but the header shows “Sign in” | The web tier could not reach the API (`API_INTERNAL_URL`) so the session lookup returned nothing. Check the web logs. |
+| Cookie not set after login | The cookie is `Secure` when `NEXT_PUBLIC_SITE_URL` is https; browsing that build over http drops it. Use https or an http site URL locally. |
+| `409` on signup | The email is already registered; use `/login` instead. |
 
 ## 9. Conventions
 

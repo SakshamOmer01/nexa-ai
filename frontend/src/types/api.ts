@@ -43,3 +43,25 @@ export interface ApiErrorEnvelope {
   };
   request_id: string;
 }
+
+/** Public user projection returned by the API; never contains credential material. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** Backend token payload. The BFF keeps `access_token` server-side and returns only the user. */
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+  user: AuthUser;
+}
+
+/** Same-origin auth response consumed by the browser. */
+export interface AuthSession {
+  user: AuthUser;
+}

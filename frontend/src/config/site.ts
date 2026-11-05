@@ -75,7 +75,7 @@ export const conventions: string[] = [
 ];
 
 export const roadmap: string[] = [
-  "Authentication and multi-tenant accounts on top of the user model",
+  "Refresh tokens, revocation and multi-tenant workspaces on top of JWT auth",
   "Model registry and inference workers in the ML workspace",
   "Observability: OpenTelemetry traces, metrics and error reporting",
   "Background jobs and evaluation pipelines for model quality gates",

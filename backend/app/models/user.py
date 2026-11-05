@@ -1,7 +1,7 @@
 """User aggregate.
 
-This is the seed model for the platform: it exercises the full stack (model → migration →
-database) without committing to a product-specific auth flow yet.
+Accounts authenticate with an email and an Argon2id password hash; the API maps this row to
+``UserResponse`` and never exposes the hash.
 """
 
 from __future__ import annotations

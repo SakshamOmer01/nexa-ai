@@ -60,10 +60,11 @@ Read [docs/architecture.md](docs/architecture.md) for the full design and
 ```text
 nexa-ai/
 ├── frontend/                 # Next.js application
-│   ├── src/app/              # routes, layout, /api/health
-│   ├── src/components/       # ui primitives, layout, sections
+│   ├── src/app/              # routes, layout, /login, /signup, /dashboard, /api/*
+│   ├── src/components/       # ui primitives, layout, sections, auth
 │   ├── src/config/           # site metadata and foundation content
-│   ├── src/lib/              # env validation, typed API client
+│   ├── src/lib/              # env validation, typed API client, auth session helpers
+│   ├── src/proxy.ts          # optimistic redirect for authenticated pages
 │   └── src/types/            # shared wire contracts
 ├── backend/                  # FastAPI service
 │   ├── app/api/              # v1 routers, system routes, dependencies
@@ -139,7 +140,8 @@ Environment templates live next to the code that reads them:
 | `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | `5` / `10` | Tune with replica count |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated, explicit origins |
 | `LOG_LEVEL` | `INFO` | JSON logs in containers |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT lifetime |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT lifetime in minutes |
+| `JWT_ALGORITHM` | `HS256` | Signing algorithm; tokens are validated against this value |
 
 **Frontend**:
 
@@ -166,6 +168,11 @@ Configuration rules:
 | `GET` | `/api/v1/health` | Readiness incl. PostgreSQL | `200` `ok` | `503` `degraded` |
 | `GET` | `/api/v1/health/live` | Versioned liveness | `200` | — |
 | `GET` | `/docs`, `/openapi.json` | Interactive docs / schema | `200` | disabled in prod |
+| `POST` | `/api/v1/auth/signup` | Create an account, return a bearer token | `201` | `409` email taken · `422` invalid input |
+| `POST` | `/api/v1/auth/login` | Exchange credentials for a bearer token | `200` | `401` invalid credentials |
+| `GET` | `/api/v1/auth/me` | Protected profile (requires bearer token) | `200` | `401` missing/invalid token |
+| `POST` | `/api/auth/signup`, `/api/auth/login` | **Web** BFF: sets the httpOnly session cookie | `201` / `200` | forwarded `4xx` |
+| `POST` | `/api/auth/logout` | **Web** clears the session cookie | `200` | — |
 | `GET` | `/api/health` | **Web** liveness + backend/DB status | `200` | `200` `degraded` |
 
 ```bash
@@ -187,6 +194,43 @@ Every response carries `X-Request-ID` and `X-Process-Time-Ms`; errors use a sing
 { "error": { "code": "not_found", "detail": "Not Found" }, "request_id": "dc55f1…" }
 ```
 
+### Authentication
+
+Email/password accounts with Argon2id password hashing and signed JWT access tokens (HS256,
+`ACCESS_TOKEN_EXPIRE_MINUTES` lifetime). The `users` table is the single source of truth; emails are
+stored lower-cased so they are unique case-insensitively.
+
+```bash
+# Create an account (201) — the token is returned once
+curl -s -X POST localhost:8000/api/v1/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ada@example.com","password":"correct-horse-battery","full_name":"Ada Lovelace"}'
+
+# Exchange credentials for a token
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"ada@example.com","password":"correct-horse-battery"}' | jq -r .access_token)
+
+# Call the protected route
+curl -s localhost:8000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+```
+
+Failure rules:
+
+- Login always returns the same `401 Invalid email or password.` (plus `WWW-Authenticate: Bearer`)
+  for unknown emails, wrong passwords and deactivated accounts, so the API does not leak which
+  emails exist.
+- Signup returns `409` for a duplicate email and `422` for invalid input; validation messages never
+  echo password values.
+- Protected routes reject missing, malformed, expired and wrongly signed tokens with `401`.
+
+The browser never holds the token in JavaScript-readable storage. The web app's same-origin auth
+routes (`/api/auth/*`) put it in an **httpOnly, SameSite=Lax** cookie, and server components read it
+to render signed-in state and the `/dashboard` page. The cookie is marked `Secure` when
+`NEXT_PUBLIC_SITE_URL` uses `https`, so production deployments get it automatically. `/dashboard`
+is guarded optimistically by [`frontend/src/proxy.ts`](frontend/src/proxy.ts) and authoritatively
+by the API call behind it.
+
 ## Testing & quality gates
 
 ```bash
@@ -196,7 +240,7 @@ make verify            # everything CI runs
 | Gate | Command | Scope |
 | --- | --- | --- |
 | Backend lint/format | `cd backend && ruff check . && ruff format --check .` | Ruff (E/F/W/I/UP/B/SIM/ASYNC/RUF) |
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security (SQLite-backed) |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security, auth (SQLite-backed) |
 | Migration DDL | `cd backend && ../.venv/bin/alembic upgrade head --sql` | PostgreSQL dialect |
 | ML lint/tests | `cd ml && ruff check . && pytest` | pipeline + registry |
 | Frontend lint | `cd frontend && npm run lint` | ESLint (Next config) |
@@ -236,12 +280,15 @@ orchestrator.
 - Production guards reject placeholder secrets, debug mode and wildcard CORS at start-up.
 - Non-root containers, no build toolchains in runtime images.
 - Browser hardening headers on API responses; inbound request ids are validated before logging.
-- Argon2id hashing and JWT helpers are centralised in `backend/app/core/security.py`.
+- Argon2id password hashing and JWT issuing/verification are centralised in
+  `backend/app/core/security.py`; auth endpoints, services and dependencies build on them.
+- Access tokens live in an httpOnly, SameSite=Lax cookie on the web tier — never in `localStorage`
+  or client state — and are only ever sent to the API server-side.
 - Database access is parameterised through SQLAlchemy; connections are pooled with pre-ping.
 
 ## Roadmap
 
-- Authentication and multi-tenant accounts on top of the `User` model
+- Multi-tenant workspaces, refresh tokens and token revocation on top of JWT auth
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
 - OpenTelemetry traces/metrics, alerting on readiness failures
@@ -252,6 +299,7 @@ orchestrator.
 - [Architecture](docs/architecture.md)
 - [Development guide](docs/development.md)
 - [ADR 0001 — Monorepo foundation](docs/adr/0001-monorepo-architecture.md)
+- [ADR 0002 — JWT authentication](docs/adr/0002-jwt-authentication.md)
 - [Backend README](backend/README.md) · [ML README](ml/README.md)
 
 ## License
