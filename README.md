@@ -63,8 +63,8 @@ nexa-ai/
 │   ├── src/app/              # routes, layout, /login, /signup, /dashboard, /api/*
 │   ├── src/components/       # ui primitives, layout, sections, auth
 │   ├── src/config/           # site metadata and foundation content
-│   ├── src/lib/              # env validation, typed API client, auth session helpers
-│   ├── src/proxy.ts          # optimistic redirect for authenticated pages
+│   ├── src/lib/              # env validation, typed API client, auth BFF/cookies/session
+│   ├── src/proxy.ts          # silent refresh + optimistic protection for /dashboard
 │   └── src/types/            # shared wire contracts
 ├── backend/                  # FastAPI service
 │   ├── app/api/              # v1 routers, system routes, dependencies
@@ -258,7 +258,7 @@ make verify            # everything CI runs
 | Gate | Command | Scope |
 | --- | --- | --- |
 | Backend lint/format | `cd backend && ruff check . && ruff format --check .` | Ruff (E/F/W/I/UP/B/SIM/ASYNC/RUF) |
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security, auth (SQLite-backed) |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security, auth and refresh-token rotation (SQLite-backed) |
 | Migration DDL | `cd backend && ../.venv/bin/alembic upgrade head --sql` | PostgreSQL dialect |
 | ML lint/tests | `cd ml && ruff check . && pytest` | pipeline + registry |
 | Frontend lint | `cd frontend && npm run lint` | ESLint (Next config) |
@@ -307,7 +307,19 @@ orchestrator.
 
 ## Roadmap
 
-- Multi-tenant workspaces, per-device session management UI and login rate limiting
+Delivered:
+
+- Monorepo foundation: typed web app, async API, PostgreSQL + Alembic, non-root images, health
+  probes and CI on every layer.
+- Email/password accounts with Argon2id hashing, short-lived JWT access tokens and a signed-in web
+  session behind an httpOnly-cookie BFF.
+- Rotating, digest-stored refresh tokens with per-login families, reuse detection and revocation on
+  logout — sessions survive access-token expiry without long-lived JWTs.
+
+Next:
+
+- Login/refresh rate limiting, email verification and password reset
+- Multi-tenant workspaces, API keys and a per-device session management UI
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
 - OpenTelemetry traces/metrics, alerting on readiness failures

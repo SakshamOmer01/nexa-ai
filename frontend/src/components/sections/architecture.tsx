@@ -58,16 +58,42 @@ export function Architecture() {
           </Card>
         </div>
 
-        <div className="mt-16 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {roadmap.map((item) => (
-            <div
-              key={item}
-              className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-4 py-3.5"
-            >
-              <CircleDashed className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <p className="text-xs leading-relaxed text-muted-foreground">{item}</p>
-            </div>
-          ))}
+        <div className="mt-16">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+              Roadmap
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Shipped milestones and what comes next
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {roadmap.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-4 py-3.5"
+              >
+                {item.status === "shipped" ? (
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-400" aria-hidden />
+                ) : (
+                  <CircleDashed
+                    className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
+                )}
+                <p
+                  className={
+                    item.status === "shipped"
+                      ? "text-xs leading-relaxed text-foreground"
+                      : "text-xs leading-relaxed text-muted-foreground"
+                  }
+                >
+                  {item.label}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

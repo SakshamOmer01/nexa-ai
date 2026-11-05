@@ -74,9 +74,25 @@ export const conventions: string[] = [
   "Lint, typecheck and tests are the same locally and in CI via scripts/verify.sh.",
 ];
 
-export const roadmap: string[] = [
-  "Multi-tenant workspaces, per-device session management and login rate limiting",
-  "Model registry and inference workers in the ML workspace",
-  "Observability: OpenTelemetry traces, metrics and error reporting",
-  "Background jobs and evaluation pipelines for model quality gates",
+export interface RoadmapItem {
+  label: string;
+  status: "shipped" | "next";
+}
+
+export const roadmap: RoadmapItem[] = [
+  {
+    label: "Foundation: typed web app, async API, PostgreSQL, Docker and CI",
+    status: "shipped",
+  },
+  {
+    label: "Accounts, JWT access tokens and rotating refresh-token sessions",
+    status: "shipped",
+  },
+  {
+    label: "Multi-tenant workspaces, per-device session management and login rate limiting",
+    status: "next",
+  },
+  { label: "Model registry and inference workers in the ML workspace", status: "next" },
+  { label: "Observability: OpenTelemetry traces, metrics and error reporting", status: "next" },
+  { label: "Background jobs and evaluation pipelines for model quality gates", status: "next" },
 ];

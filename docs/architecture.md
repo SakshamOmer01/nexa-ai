@@ -52,11 +52,12 @@
   `src/app/globals.css` (Tailwind v4 CSS-first config).
 - **Contracts** — `src/types/api.ts` mirrors backend schemas; `src/lib/api-client.ts` is the only
   place that knows how to talk to the API (timeout, error envelope, base URL selection).
-- **Authentication** — `/api/auth/*` route handlers are a same-origin BFF: they call the API and
-  store the access and refresh tokens in httpOnly, SameSite=Lax cookies
-  (`src/lib/auth/session.ts`). Server components read them to render the header's signed-in state
-  and the `/dashboard` page; `src/proxy.ts` rotates a stale pair through `/auth/refresh` before the
-  render and redirects requests without a session. No token is written to `localStorage`.
+- **Authentication** — `/api/auth/*` route handlers are a same-origin BFF (`src/lib/auth/bff.ts`):
+  they call the API and store the access and refresh tokens in httpOnly, SameSite=Lax cookies whose
+  flags live in `src/lib/auth/cookies.ts`. Server components read the session through
+  `src/lib/auth/session.ts` to render the header's signed-in state and the `/dashboard` page;
+  `src/proxy.ts` rotates a stale pair through `/auth/refresh` before the render and redirects
+  requests without a session. No token is written to `localStorage`.
 - **Health** — `src/app/api/health/route.ts` reports web liveness plus backend and database status.
   It always returns HTTP 200 while the web process runs so a backend outage does not restart the
   web containers.

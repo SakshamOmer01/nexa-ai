@@ -122,8 +122,8 @@ cd backend
 # Backend unit/contract tests (no database required — in-memory SQLite)
 cd backend && ../.venv/bin/python -m pytest
 
-# Auth only
-cd backend && ../.venv/bin/python -m pytest tests/test_auth.py
+# Auth only — access tokens, web session and refresh-token rotation
+cd backend && ../.venv/bin/python -m pytest tests/test_auth.py tests/test_refresh_tokens.py
 
 # ML workspace
 cd ml && ../.venv/bin/python -m pytest
@@ -136,6 +136,9 @@ pytest tests -q
 
 Integration tests target `NEXA_BACKEND_URL` / `NEXA_FRONTEND_URL` (defaults `localhost:8000` and
 `localhost:3000`) and wait up to `NEXA_STARTUP_TIMEOUT` seconds for readiness.
+`tests/integration/test_auth_contracts.py` covers the full loop against the running stack: API
+signup/login/refresh/logout, the BFF's httpOnly cookies, silent refresh in `proxy.ts` and the
+signed-out `/dashboard` redirect.
 
 ## 6. Verify before pushing
 
