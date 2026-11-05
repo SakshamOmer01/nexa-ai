@@ -53,11 +53,16 @@ export interface AuthUser {
   created_at: string;
 }
 
-/** Backend token payload. The BFF keeps `access_token` server-side and returns only the user. */
+/**
+ * Backend token pair. The BFF keeps both tokens server-side and returns only the user.
+ * `refresh_token` is single-use: every refresh returns a replacement.
+ */
 export interface AuthTokenResponse {
   access_token: string;
+  refresh_token: string;
   token_type: "bearer";
   expires_in: number;
+  refresh_expires_in: number;
   user: AuthUser;
 }
 

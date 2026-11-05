@@ -1,7 +1,8 @@
 """Authentication contracts.
 
-These models are the public wire format for signup, login and the authenticated user profile.
-Passwords are write-only and never appear in a response model.
+These models are the public wire format for signup, login, refresh, logout and the authenticated
+user profile. Passwords and refresh tokens are write-only and never appear in a response model
+except as the newly issued pair.
 """
 
 from __future__ import annotations
@@ -54,6 +55,18 @@ class LoginRequest(BaseModel):
         return value.strip().lower()
 
 
+class RefreshTokenRequest(BaseModel):
+    """Opaque refresh credential issued alongside an access token."""
+
+    refresh_token: Annotated[str, Field(min_length=20, max_length=512, repr=False)]
+
+
+class LogoutRequest(BaseModel):
+    """Optional refresh credential identifying the session family to revoke."""
+
+    refresh_token: str | None = Field(default=None, max_length=512, repr=False)
+
+
 class UserResponse(BaseModel):
     """Public projection of a user; deliberately excludes ``hashed_password``."""
 
@@ -67,9 +80,14 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Bearer token issued by signup and login."""
+    """Token pair issued by signup, login and refresh."""
 
     access_token: str
+    refresh_token: str = Field(
+        description="Opaque, single-use refresh credential; rotate it on every refresh.",
+        repr=False,
+    )
     token_type: Literal["bearer"] = "bearer"
     expires_in: int = Field(description="Access-token lifetime in seconds.", ge=1)
+    refresh_expires_in: int = Field(description="Refresh-token lifetime in seconds.", ge=1)
     user: UserResponse

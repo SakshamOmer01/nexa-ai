@@ -141,6 +141,7 @@ Environment templates live next to the code that reads them:
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated, explicit origins |
 | `LOG_LEVEL` | `INFO` | JSON logs in containers |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT lifetime in minutes |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh-token family lifetime in days |
 | `JWT_ALGORITHM` | `HS256` | Signing algorithm; tokens are validated against this value |
 
 **Frontend**:
@@ -169,10 +170,12 @@ Configuration rules:
 | `GET` | `/api/v1/health/live` | Versioned liveness | `200` | — |
 | `GET` | `/docs`, `/openapi.json` | Interactive docs / schema | `200` | disabled in prod |
 | `POST` | `/api/v1/auth/signup` | Create an account, return a bearer token | `201` | `409` email taken · `422` invalid input |
-| `POST` | `/api/v1/auth/login` | Exchange credentials for a bearer token | `200` | `401` invalid credentials |
+| `POST` | `/api/v1/auth/login` | Exchange credentials for a token pair | `200` | `401` invalid credentials |
+| `POST` | `/api/v1/auth/refresh` | Rotate a refresh token (single use) | `200` | `401` invalid/expired/replayed |
+| `POST` | `/api/v1/auth/logout` | Revoke the refresh-token family | `204` | — (idempotent) |
 | `GET` | `/api/v1/auth/me` | Protected profile (requires bearer token) | `200` | `401` missing/invalid token |
-| `POST` | `/api/auth/signup`, `/api/auth/login` | **Web** BFF: sets the httpOnly session cookie | `201` / `200` | forwarded `4xx` |
-| `POST` | `/api/auth/logout` | **Web** clears the session cookie | `200` | — |
+| `POST` | `/api/auth/signup`, `/api/auth/login` | **Web** BFF: sets both httpOnly session cookies | `201` / `200` | forwarded `4xx` |
+| `POST` | `/api/auth/logout` | **Web** revokes the family and clears both cookies | `200` | — |
 | `GET` | `/api/health` | **Web** liveness + backend/DB status | `200` | `200` `degraded` |
 
 ```bash
@@ -196,23 +199,32 @@ Every response carries `X-Request-ID` and `X-Process-Time-Ms`; errors use a sing
 
 ### Authentication
 
-Email/password accounts with Argon2id password hashing and signed JWT access tokens (HS256,
-`ACCESS_TOKEN_EXPIRE_MINUTES` lifetime). The `users` table is the single source of truth; emails are
-stored lower-cased so they are unique case-insensitively.
+Email/password accounts with Argon2id password hashing and short-lived HS256 JWT access tokens
+(`ACCESS_TOKEN_EXPIRE_MINUTES`). Every login also starts a rotating, opaque refresh-token family
+(`REFRESH_TOKEN_EXPIRE_DAYS`), so sessions survive access-token expiry without long-lived JWTs. The
+`users` table is the single source of truth; emails are stored lower-cased so they are unique
+case-insensitively.
 
 ```bash
-# Create an account (201) — the token is returned once
-curl -s -X POST localhost:8000/api/v1/auth/signup \
+# Create an account (201) — capture both tokens
+PAIR=$(curl -s -X POST localhost:8000/api/v1/auth/signup \
   -H 'Content-Type: application/json' \
-  -d '{"email":"ada@example.com","password":"correct-horse-battery","full_name":"Ada Lovelace"}'
-
-# Exchange credentials for a token
-TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"ada@example.com","password":"correct-horse-battery"}' | jq -r .access_token)
+  -d '{"email":"ada@example.com","password":"correct-horse-battery","full_name":"Ada Lovelace"}')
+TOKEN=$(jq -r .access_token <<<"$PAIR")
+REFRESH=$(jq -r .refresh_token <<<"$PAIR")
 
 # Call the protected route
 curl -s localhost:8000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+
+# Rotate the refresh token — the presented token is revoked immediately
+PAIR=$(curl -s -X POST localhost:8000/api/v1/auth/refresh \
+  -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH\"}")
+TOKEN=$(jq -r .access_token <<<"$PAIR")
+REFRESH=$(jq -r .refresh_token <<<"$PAIR")
+
+# Revoke the whole session family
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/auth/logout \
+  -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH\"}"   # 204
 ```
 
 Failure rules:
@@ -223,13 +235,19 @@ Failure rules:
 - Signup returns `409` for a duplicate email and `422` for invalid input; validation messages never
   echo password values.
 - Protected routes reject missing, malformed, expired and wrongly signed tokens with `401`.
+- Refresh tokens are single-use: each refresh revokes the presented token and returns a successor.
+  Replaying a rotated token after a 30-second concurrency grace period revokes the whole family;
+  logout revokes it immediately.
+- Only a SHA-256 digest of each refresh token is stored, so a database leak cannot be replayed, and
+  every refresh failure returns the same generic `401`.
 
-The browser never holds the token in JavaScript-readable storage. The web app's same-origin auth
-routes (`/api/auth/*`) put it in an **httpOnly, SameSite=Lax** cookie, and server components read it
-to render signed-in state and the `/dashboard` page. The cookie is marked `Secure` when
-`NEXT_PUBLIC_SITE_URL` uses `https`, so production deployments get it automatically. `/dashboard`
-is guarded optimistically by [`frontend/src/proxy.ts`](frontend/src/proxy.ts) and authoritatively
-by the API call behind it.
+The browser never holds either token in JavaScript-readable storage. The web app's same-origin auth
+routes (`/api/auth/*`) put both in **httpOnly, SameSite=Lax** cookies, and server components read
+the access token to render signed-in state and the `/dashboard` page. Cookies are marked `Secure`
+when `NEXT_PUBLIC_SITE_URL` uses `https`, so production deployments get it automatically. When the
+access cookie is missing or stale, [`frontend/src/proxy.ts`](frontend/src/proxy.ts) rotates the
+session before rendering and forwards the new pair to the page; `/dashboard` is guarded
+optimistically there and authoritatively by the API call behind it.
 
 ## Testing & quality gates
 
@@ -282,13 +300,14 @@ orchestrator.
 - Browser hardening headers on API responses; inbound request ids are validated before logging.
 - Argon2id password hashing and JWT issuing/verification are centralised in
   `backend/app/core/security.py`; auth endpoints, services and dependencies build on them.
-- Access tokens live in an httpOnly, SameSite=Lax cookie on the web tier — never in `localStorage`
-  or client state — and are only ever sent to the API server-side.
+- Access and refresh tokens live in httpOnly, SameSite=Lax cookies on the web tier — never in
+  `localStorage` or client state — and are only ever sent to the API server-side. Refresh tokens are
+  stored as SHA-256 digests and revoked on rotation, replay or logout.
 - Database access is parameterised through SQLAlchemy; connections are pooled with pre-ping.
 
 ## Roadmap
 
-- Multi-tenant workspaces, refresh tokens and token revocation on top of JWT auth
+- Multi-tenant workspaces, per-device session management UI and login rate limiting
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
 - OpenTelemetry traces/metrics, alerting on readiness failures
@@ -300,6 +319,7 @@ orchestrator.
 - [Development guide](docs/development.md)
 - [ADR 0001 — Monorepo foundation](docs/adr/0001-monorepo-architecture.md)
 - [ADR 0002 — JWT authentication](docs/adr/0002-jwt-authentication.md)
+- [ADR 0003 — Refresh-token rotation](docs/adr/0003-refresh-token-rotation.md)
 - [Backend README](backend/README.md) · [ML README](ml/README.md)
 
 ## License

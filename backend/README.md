@@ -15,7 +15,8 @@ SQLAlchemy 2.0 async). See the root [README](../README.md) and
 | Cross-cutting | `app/core/` | Settings, logging, security primitives, errors, middleware |
 
 Auth-specific modules: `app/api/v1/endpoints/auth.py` (HTTP), `app/services/auth.py` (use cases),
-`app/schemas/auth.py` (contracts), `app/api/deps.py#get_current_user` (bearer validation).
+`app/schemas/auth.py` (contracts), `app/api/deps.py#get_current_user` (bearer validation) and
+`app/models/refresh_token.py` (rotating session families).
 
 ## Local development
 
@@ -35,7 +36,9 @@ API docs: <http://localhost:8000/docs> · Liveness: `/health` · Readiness: `/ap
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/auth/signup` | — | Create an account (HTTP 201) |
-| `POST` | `/api/v1/auth/login` | — | Exchange credentials for a token |
+| `POST` | `/api/v1/auth/login` | — | Exchange credentials for a token pair |
+| `POST` | `/api/v1/auth/refresh` | Refresh token | Rotate the token pair (single use) |
+| `POST` | `/api/v1/auth/logout` | Refresh token (optional) | Revoke the session family (204, idempotent) |
 | `GET` | `/api/v1/auth/me` | Bearer | Current user (protected route) |
 
 - Passwords are hashed with Argon2id (`app/core/security.py`); plaintext is never stored, logged or
@@ -48,21 +51,31 @@ API docs: <http://localhost:8000/docs> · Liveness: `/health` · Readiness: `/ap
   account all return `401 Invalid email or password.` with `WWW-Authenticate: Bearer`); a dummy
   Argon2 verification keeps timing comparable when no account matches.
 - `GET /auth/me` validates the signature, expiry and token type, then loads an active user.
+- Refresh tokens are 256-bit opaque secrets stored only as SHA-256 digests in `refresh_tokens`.
+  Every login starts a family; refresh revokes the presented row and issues a successor in the same
+  family. Replaying a rotated token after a 30-second concurrency grace revokes the family, and
+  logout revokes it immediately. Access tokens stay stateless until they expire.
 
 ```bash
-curl -s -X POST localhost:8000/api/v1/auth/signup \
+PAIR=$(curl -s -X POST localhost:8000/api/v1/auth/signup \
   -H 'Content-Type: application/json' \
-  -d '{"email":"ada@example.com","password":"correct-horse-battery"}'
+  -d '{"email":"ada@example.com","password":"correct-horse-battery"}')
+TOKEN=$(jq -r .access_token <<<"$PAIR")
+REFRESH=$(jq -r .refresh_token <<<"$PAIR")
 
-TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"ada@example.com","password":"correct-horse-battery"}' | jq -r .access_token)
+PAIR=$(curl -s -X POST localhost:8000/api/v1/auth/refresh \
+  -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH\"}")
+TOKEN=$(jq -r .access_token <<<"$PAIR")
 
 curl -s localhost:8000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/auth/logout \
+  -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH\"}"   # 204
 ```
 
-Tests: `pytest tests/test_auth.py` covers registration, duplicate emails, hashing, token rejection
-(expired, forged, malformed), deactivated accounts and password redaction.
+Tests: `pytest tests/test_auth.py tests/test_refresh_tokens.py` covers registration, duplicate
+emails, hashing, token rejection (expired, forged, malformed), deactivated accounts, rotation,
+concurrency grace, replay revocation, logout and password/token redaction.
 
 ## Quality gates
 

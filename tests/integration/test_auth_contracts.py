@@ -75,7 +75,51 @@ def test_protected_route_rejects_missing_and_forged_tokens(backend: httpx.Client
     assert forged.status_code == 401
 
 
-def test_frontend_bff_creates_httponly_session(frontend_url: str) -> None:
+def test_refresh_rotates_and_logout_revokes(backend: httpx.Client) -> None:
+    email = unique_email("rotate")
+    signup = backend.post("/api/v1/auth/signup", json={"email": email, "password": PASSWORD})
+    assert signup.status_code == 201
+    first = signup.json()
+
+    rotated = backend.post(
+        "/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert rotated.status_code == 200
+    second = rotated.json()
+    assert second["refresh_token"] != first["refresh_token"]
+
+    me = backend.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {second['access_token']}"}
+    )
+    assert me.status_code == 200
+
+    # Concurrent replay is rejected without revoking the family the winner is using.
+    replay = backend.post(
+        "/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert replay.status_code == 401
+    assert (
+        backend.post(
+            "/api/v1/auth/refresh", json={"refresh_token": second["refresh_token"]}
+        ).status_code
+        == 200
+    )
+
+    logout = backend.post(
+        "/api/v1/auth/logout", json={"refresh_token": second["refresh_token"]}
+    )
+    assert logout.status_code == 204
+    assert (
+        backend.post(
+            "/api/v1/auth/refresh", json={"refresh_token": second["refresh_token"]}
+        ).status_code
+        == 401
+    )
+
+
+def test_frontend_bff_creates_httponly_session(
+    frontend_url: str, backend: httpx.Client
+) -> None:
     email = unique_email("bff")
 
     with httpx.Client(base_url=frontend_url, timeout=10.0) as client:
@@ -87,11 +131,15 @@ def test_frontend_bff_creates_httponly_session(frontend_url: str) -> None:
         assert signup.status_code == 201
         assert signup.json()["user"]["email"] == email
         assert "access_token" not in signup.text
+        assert "refresh_token" not in signup.text
 
-        cookie = signup.headers.get("set-cookie", "")
-        assert "nexa_access_token=" in cookie
-        assert "HttpOnly" in cookie
-        assert "SameSite=lax" in cookie
+        cookies = signup.headers.get_list("set-cookie")
+        assert any("nexa_access_token=" in cookie for cookie in cookies)
+        assert any("nexa_refresh_token=" in cookie for cookie in cookies)
+        assert all("HttpOnly" in cookie and "SameSite=lax" in cookie for cookie in cookies)
+
+        refresh_token = client.cookies.get("nexa_refresh_token")
+        assert refresh_token
 
         dashboard = client.get("/dashboard")
         assert dashboard.status_code == 200
@@ -103,6 +151,35 @@ def test_frontend_bff_creates_httponly_session(frontend_url: str) -> None:
         protected = client.get("/dashboard", follow_redirects=False)
         assert protected.status_code == 307
         assert protected.headers["location"] == "/login"
+
+    # Logout must revoke the server-side family, not only clear this browser's cookies.
+    revoked = backend.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    assert revoked.status_code == 401
+
+
+def test_proxy_refreshes_an_expired_access_cookie(frontend_url: str) -> None:
+    email = unique_email("silent")
+    host = httpx.URL(frontend_url).host
+
+    with httpx.Client(base_url=frontend_url, timeout=10.0) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": PASSWORD, "full_name": "Silent Refresh"},
+        )
+        assert signup.status_code == 201
+
+        refresh_token = client.cookies.get("nexa_refresh_token")
+        assert refresh_token
+
+        # Simulate an access token that has outlived its expiry while the refresh token is valid.
+        client.cookies.set("nexa_access_token", "not-a-jwt", domain=host, path="/")
+
+        dashboard = client.get("/dashboard", follow_redirects=False)
+        assert dashboard.status_code == 200
+        assert email in dashboard.text
+
+        assert client.cookies.get("nexa_access_token") not in {None, "not-a-jwt"}
+        assert client.cookies.get("nexa_refresh_token") not in {None, refresh_token}
 
 
 def test_frontend_bff_reports_backend_auth_errors(frontend_url: str) -> None:

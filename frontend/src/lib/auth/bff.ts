@@ -3,14 +3,14 @@ import { NextResponse } from "next/server";
 import { ApiClientError, apiRequest } from "@/lib/api-client";
 import type { AuthSession, AuthTokenResponse } from "@/types/api";
 
-import { setSessionToken } from "./session";
+import { setSessionTokens } from "./session";
 
 /**
  * Credential proxy shared by the login and signup route handlers.
  *
- * The browser talks to this same-origin endpoint; the backend token is stored in an httpOnly
- * cookie and only the public user is returned, so credentials never live in browser storage or
- * JavaScript-readable state.
+ * The browser talks to this same-origin endpoint; the backend access and refresh tokens are stored
+ * in httpOnly cookies and only the public user is returned, so credentials never live in browser
+ * storage or JavaScript-readable state.
  */
 
 type CredentialPath = "auth/login" | "auth/signup";
@@ -43,7 +43,7 @@ export async function handleCredentials(
       timeoutMs: 10_000,
     });
 
-    await setSessionToken(token.access_token, token.expires_in);
+    await setSessionTokens(token);
 
     return NextResponse.json<AuthSession>(
       { user: token.user },

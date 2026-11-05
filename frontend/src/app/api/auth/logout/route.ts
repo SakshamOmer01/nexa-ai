@@ -1,9 +1,33 @@
 import { NextResponse } from "next/server";
 
-import { clearSessionToken } from "@/lib/auth/session";
+import { apiRequestVoid } from "@/lib/api-client";
+import { clearSessionTokens, getRefreshToken } from "@/lib/auth/session";
 
-/** Clear the httpOnly session cookie. The token itself stays valid until it expires. */
+/**
+ * Revoke the current session family and clear both httpOnly cookies.
+ *
+ * Logging out locally must always succeed, so an unreachable API is tolerated: the refresh token
+ * then stays valid until it expires, but this browser can no longer use it.
+ */
 export async function POST(): Promise<NextResponse> {
-  await clearSessionToken();
+  const refreshToken = await getRefreshToken();
+
+  if (refreshToken) {
+    try {
+      await apiRequestVoid("auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        timeoutMs: 5_000,
+      });
+    } catch (error) {
+      console.warn(
+        "auth_logout_upstream_failed",
+        error instanceof Error ? error.message : "unknown error",
+      );
+    }
+  }
+
+  await clearSessionTokens();
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
 }

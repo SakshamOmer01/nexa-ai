@@ -6,6 +6,8 @@ added later share one audited implementation instead of re-implementing crypto p
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -32,6 +34,20 @@ def verify_password(password: str, password_hash: str) -> bool:
         return _password_hash.verify(password, password_hash)
     except Exception:
         return False
+
+
+def generate_refresh_token() -> str:
+    """Return a high-entropy opaque token suitable for use as a refresh credential."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Return the digest stored for ``token``.
+
+    Refresh tokens are already 256-bit random values, so a fast one-way digest is sufficient and
+    keeps lookups cheap; Argon2 is reserved for low-entropy passwords.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_access_token(

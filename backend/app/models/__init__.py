@@ -4,6 +4,7 @@ Importing this package registers every model on ``Base.metadata``, which is what
 diff the schema. Add new modules to ``__all__`` and import them here.
 """
 
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
-__all__ = ["User"]
+__all__ = ["RefreshToken", "User"]

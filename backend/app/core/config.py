@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     secret_key: SecretStr = SecretStr("dev-only-insecure-secret-change-me")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=30, ge=1, le=60 * 24 * 30)
+    refresh_token_expire_days: int = Field(default=30, ge=1, le=365)
 
     # --- Persistence --------------------------------------------------------------------
     database_url: str = "postgresql+asyncpg://nexa:nexa@localhost:5432/nexa"

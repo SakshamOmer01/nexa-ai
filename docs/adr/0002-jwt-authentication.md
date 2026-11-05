@@ -1,6 +1,6 @@
 # ADR 0002 — JWT authentication with an httpOnly web session
 
-- Status: Accepted
+- Status: Accepted; token lifetime and revocation amended by [ADR 0003](0003-refresh-token-rotation.md)
 - Date: 2026-11-05
 
 ## Context
@@ -20,7 +20,8 @@ per-user inference jobs can exist. Constraints:
 **API:** email/password accounts with Argon2id hashes and short-lived HS256 JWT access tokens.
 
 - `POST /api/v1/auth/signup` and `POST /api/v1/auth/login` return
-  `{ access_token, token_type, expires_in, user }`.
+  `{ access_token, refresh_token, token_type, expires_in, refresh_expires_in, user }`; ADR 0003 adds
+  rotation and revocation for the refresh token.
 - Claims are `sub` (user UUID), `iat`, `exp` and `type: access`; `decode_access_token` requires
   `sub`/`exp` and rejects any other token type.
 - `GET /api/v1/auth/me` is the protected route. A reusable `get_current_user` dependency validates
@@ -54,9 +55,10 @@ Positive:
 
 Trade-offs / limits:
 
-- Revocation is not immediate: a stolen token stays valid until `exp`. Mitigations are the short
-  lifetime, `is_active` checks on every request, and `SECRET_KEY` rotation (which invalidates all
-  tokens). Refresh tokens, a token version/denylist and per-device sessions are follow-ups.
+- Access-token revocation is not immediate: a stolen access token stays valid until `exp`.
+  Mitigations are the short lifetime, `is_active` checks on every request, and `SECRET_KEY`
+  rotation (which invalidates all tokens). ADR 0003 adds revocable refresh tokens; a token
+  version/denylist for access tokens and a per-device management UI remain follow-ups.
 - BFF routes require the web tier to reach the API (`API_INTERNAL_URL`); a web-only deployment
   cannot authenticate users.
 - `SameSite=Lax` plus JSON-only routes is the CSRF defence; a dedicated token/Origin check would be

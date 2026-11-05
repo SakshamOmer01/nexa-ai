@@ -135,7 +135,8 @@ async function DashboardContent() {
               <code>{`GET /api/v1/auth/me\nAuthorization: Bearer <token>`}</code>
             </pre>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Signing out clears the cookie; the token itself expires after the configured lifetime.
+              The access token is short-lived. A refresh token in a second httpOnly cookie renews it
+              silently; signing out revokes that session and clears both cookies.
             </p>
           </CardContent>
         </Card>

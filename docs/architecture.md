@@ -53,10 +53,10 @@
 - **Contracts** — `src/types/api.ts` mirrors backend schemas; `src/lib/api-client.ts` is the only
   place that knows how to talk to the API (timeout, error envelope, base URL selection).
 - **Authentication** — `/api/auth/*` route handlers are a same-origin BFF: they call the API and
-  store the access token in an httpOnly, SameSite=Lax cookie (`src/lib/auth/session.ts`). Server
-  components read that cookie to render the header's signed-in state and the `/dashboard` page;
-  `src/proxy.ts` performs the optimistic redirect for missing sessions. Browser JavaScript never
-  receives the token, and no token is written to `localStorage`."
+  store the access and refresh tokens in httpOnly, SameSite=Lax cookies
+  (`src/lib/auth/session.ts`). Server components read them to render the header's signed-in state
+  and the `/dashboard` page; `src/proxy.ts` rotates a stale pair through `/auth/refresh` before the
+  render and redirects requests without a session. No token is written to `localStorage`.
 - **Health** — `src/app/api/health/route.ts` reports web liveness plus backend and database status.
   It always returns HTTP 200 while the web process runs so a backend outage does not restart the
   web containers.
@@ -112,13 +112,14 @@ environment with `.env` files for local development only.
 
 ## Authentication
 
-Email/password accounts, backed by the `users` table:
+Email/password accounts, backed by the `users` and `refresh_tokens` tables:
 
 ```
 Browser ──POST /api/auth/login──▶ Next.js BFF ──POST /api/v1/auth/login──▶ FastAPI
    ▲                                   │                                   │
-   └── httpOnly cookie ◀───────────────┘                        Argon2id verify + JWT
+   └── httpOnly access + refresh ◀─────┘                    Argon2id verify + JWT pair
 
+Proxy ──stale access cookie──▶ POST /api/v1/auth/refresh ──▶ rotate + revoke old
 Server Component ──cookie──▶ GET /api/v1/auth/me (Authorization: Bearer …) ──▶ FastAPI
 ```
 
@@ -127,14 +128,20 @@ Rules:
 | Concern | Decision |
 | --- | --- |
 | Password storage | Argon2id via `pwdlib`, one hash per password, verified in constant-ish time |
-| Token | HS256 JWT with `sub`, `iat`, `exp`, `type: access`; lifetime from settings |
-| Token transport | httpOnly, SameSite=Lax cookie owned by the web tier; `Secure` when the site URL is https |
+| Access token | HS256 JWT with `sub`, `iat`, `exp`, `type: access`; lifetime from settings |
+| Refresh token | 256-bit opaque secret; only a SHA-256 digest is stored, with a per-login family id |
+| Rotation | Every refresh revokes the presented row and issues a successor in the same family |
+| Reuse detection | Replay beyond a 30-second concurrency grace revokes the whole family |
+| Revocation | Logout revokes the family immediately; access JWTs still expire on their own |
+| Token transport | httpOnly, SameSite=Lax cookies owned by the web tier; `Secure` when the site URL is https |
 | Validation | `get_current_user` checks signature, expiry, token type and an active user row |
 | Error shape | Single `401` for every credential failure; `409` for duplicate emails; `422` for input |
 | Enumeration | Unknown email, wrong password and inactive account are indistinguishable |
-| Page protection | Optimistic cookie check in `proxy.ts`, authoritative API check in the page |
+| Silent refresh | `proxy.ts` rotates before rendering when the access cookie is missing or stale |
+| Page protection | Optimistic session check in `proxy.ts`, authoritative API check in the page |
 
-See [ADR 0002](adr/0002-jwt-authentication.md) for the reasoning and rejected alternatives.
+See [ADR 0002](adr/0002-jwt-authentication.md) and [ADR 0003](adr/0003-refresh-token-rotation.md)
+for the reasoning and rejected alternatives.
 
 ## Security posture
 
@@ -144,7 +151,8 @@ See [ADR 0002](adr/0002-jwt-authentication.md) for the reasoning and rejected al
   point used by the auth service.
 - Passwords never appear in responses, logs or validation errors; `UserResponse` is a narrow
   projection of the model.
-- Access tokens stay server-side in an httpOnly cookie — never in browser storage or RSC props.
+- Access and refresh tokens stay server-side in httpOnly cookies — never in browser storage or RSC
+  props. Refresh tokens are stored as digests and revoked on rotation, replay or logout.
 - Secrets come from the environment/secret manager; `.env` files are git-ignored.
 - Database access is pooled and parameterised through SQLAlchemy; no string-built SQL.
 
@@ -163,3 +171,4 @@ See [ADR 0002](adr/0002-jwt-authentication.md) for the reasoning and rejected al
 
 - [ADR 0001 — Monorepo foundation](adr/0001-monorepo-architecture.md)
 - [ADR 0002 — JWT authentication](adr/0002-jwt-authentication.md)
+- [ADR 0003 — Refresh-token rotation](adr/0003-refresh-token-rotation.md)

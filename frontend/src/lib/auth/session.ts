@@ -1,45 +1,43 @@
 import { cookies } from "next/headers";
 
 import { apiRequest } from "@/lib/api-client";
-import { env } from "@/lib/env";
-import type { AuthUser } from "@/types/api";
+import type { AuthTokenResponse, AuthUser } from "@/types/api";
 
-import { SESSION_COOKIE } from "./constants";
+import { REFRESH_COOKIE, SESSION_COOKIE } from "./constants";
+import { sessionCookies } from "./cookies";
 
 /**
  * Session helpers.
  *
- * The access token never reaches the browser: it lives in an httpOnly cookie set by the auth BFF
- * routes and is only read by server code. `import` of `next/headers` also makes this module
- * impossible to bundle for the client.
+ * Tokens never reach the browser: they live in httpOnly cookies set by the auth BFF routes and are
+ * only read by server code. `import` of `next/headers` also makes this module impossible to bundle
+ * for the client. Rotation and revocation happen through the backend; `src/proxy.ts` refreshes an
+ * expired access cookie before a page renders.
  */
 
-const cookieOptions = {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: env.NEXT_PUBLIC_SITE_URL.startsWith("https://"),
-  path: "/",
-  priority: "high",
-} as const;
-
-/** Read the raw bearer token, or `null` when the visitor is signed out. */
+/** Read the raw access token, or `null` when the visitor is signed out. */
 export async function getSessionToken(): Promise<string | null> {
   return (await cookies()).get(SESSION_COOKIE)?.value ?? null;
 }
 
-/** Persist a freshly issued token. Only valid inside a route handler or server function. */
-export async function setSessionToken(token: string, expiresIn: number): Promise<void> {
-  (await cookies()).set({
-    name: SESSION_COOKIE,
-    value: token,
-    ...cookieOptions,
-    maxAge: expiresIn,
-  });
+/** Read the refresh token, or `null` for sessions created before refresh tokens existed. */
+export async function getRefreshToken(): Promise<string | null> {
+  return (await cookies()).get(REFRESH_COOKIE)?.value ?? null;
 }
 
-/** Remove the session cookie. */
-export async function clearSessionToken(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+/** Persist a freshly issued token pair. Only valid inside a route handler or server function. */
+export async function setSessionTokens(tokens: AuthTokenResponse): Promise<void> {
+  const jar = await cookies();
+  for (const cookie of sessionCookies(tokens)) {
+    jar.set(cookie);
+  }
+}
+
+/** Remove both session cookies. Revocation of the server-side token is a separate step. */
+export async function clearSessionTokens(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  jar.delete(REFRESH_COOKIE);
 }
 
 /**
