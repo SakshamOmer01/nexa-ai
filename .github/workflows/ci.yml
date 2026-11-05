@@ -71,7 +71,20 @@ jobs:
         run: python -c "from app.main import app; print(app.title)"
 
       - name: Tests
-        run: pytest
+        run: pytest --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/test-results.xml
+          if-no-files-found: warn
+
+      - name: Summarize test results
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/junit-summary.py --title "Backend tests" backend/test-results.xml >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     name: Frontend — lint, typecheck, build
@@ -138,7 +151,20 @@ jobs:
           ruff format --check .
 
       - name: Tests
-        run: pytest
+        run: pytest --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-test-results
+          path: ml/test-results.xml
+          if-no-files-found: warn
+
+      - name: Summarize test results
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/junit-summary.py --title "ML workspace tests" ml/test-results.xml >> "$GITHUB_STEP_SUMMARY"
 
   integration:
     name: Containers — compose stack + integration tests
@@ -220,7 +246,7 @@ jobs:
 
       - name: Summarize integration test results
         if: always()
-        run: python scripts/junit-summary.py integration-report.xml >> "$GITHUB_STEP_SUMMARY"
+        run: python scripts/junit-summary.py --title "Integration tests" integration-report.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Container logs
         if: failure()

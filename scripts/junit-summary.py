@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Render a JUnit XML report as Markdown for the GitHub Actions step summary.
 
-CI job logs need repository admin rights, so publishing the integration report as an artifact
-still hides per-test outcomes from most reviewers. This prints the failures, errors and skips into
-the run page, where anyone with repository access can read them.
+CI job logs need repository admin rights, so publishing the reports as artifacts still hides
+per-test outcomes from most reviewers. This prints the failures, errors and skips into the run page,
+where anyone with repository access can read them.
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -38,13 +39,14 @@ def _row(status: str, name: str, detail: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print(f"usage: {Path(argv[0]).name} <junit-report.xml>", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("report", metavar="report.xml", help="JUnit XML report to summarize")
+    parser.add_argument("--title", default="Tests", help="heading for the summary section")
+    args = parser.parse_args(argv[1:])
 
-    report = Path(argv[1])
+    report = Path(args.report)
     if not report.is_file():
-        print("### Integration tests\n")
+        print(f"### {args.title}\n")
         print(f"No JUnit report at `{report}`; the suite did not produce results.")
         return 0
 
@@ -58,7 +60,7 @@ def main(argv: list[str]) -> int:
     failed = sum(1 for status, _, _ in results if status in ("failed", "errored"))
     skipped = sum(1 for status, _, _ in results if status == "skipped")
 
-    print("### Integration tests\n")
+    print(f"### {args.title}\n")
     print(f"**{len(results)} tests** — {passed} passed, {failed} failed, {skipped} skipped\n")
 
     noteworthy = [result for result in results if result[0] != "passed"]
