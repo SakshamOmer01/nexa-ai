@@ -195,7 +195,7 @@ make verify            # everything CI runs
 
 | Gate | Command | Scope |
 | --- | --- | --- |
-| Backend lint/format | `cd backend && ruff check . && ruff format --check .` | 23 tests below |
+| Backend lint/format | `cd backend && ruff check . && ruff format --check .` | Ruff (E/F/W/I/UP/B/SIM/ASYNC/RUF) |
 | Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security (SQLite-backed) |
 | Migration DDL | `cd backend && ../.venv/bin/alembic upgrade head --sql` | PostgreSQL dialect |
 | ML lint/tests | `cd ml && ruff check . && pytest` | pipeline + registry |
