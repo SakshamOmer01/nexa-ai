@@ -37,10 +37,22 @@ async def test_readiness_reports_dependencies_up(client: AsyncClient) -> None:
     assert body["dependencies"][0]["status"] == "up"
 
 
-async def test_readiness_returns_503_when_database_is_down(settings: Settings) -> None:
+# The driver reports an unreachable server either through a SQLAlchemy error or, because
+# SQLAlchemy re-raises connection-level failures unwrapped, as a raw OSError. Both must fail closed.
+@pytest.mark.parametrize(
+    "failure",
+    [
+        OperationalError("SELECT 1", {}, Exception("down")),
+        ConnectionRefusedError(111, "Connection refused"),
+    ],
+    ids=["sqlalchemy-error", "driver-connection-refused"],
+)
+async def test_readiness_returns_503_when_database_is_down(
+    settings: Settings, failure: Exception
+) -> None:
     app = create_app(settings)
     broken_session = AsyncMock(spec=AsyncSession)
-    broken_session.execute.side_effect = OperationalError("SELECT 1", {}, Exception("down"))
+    broken_session.execute.side_effect = failure
 
     async def _override_session() -> AsyncIterator[AsyncSession]:
         yield broken_session

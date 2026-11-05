@@ -159,6 +159,12 @@ Integration tests target `NEXA_BACKEND_URL` / `NEXA_FRONTEND_URL` (defaults `loc
 signup/login/refresh/logout, the BFF's httpOnly cookies, silent refresh in `proxy.ts` and the
 signed-out `/dashboard` redirect.
 
+`tests/integration/test_health_contracts.py` also proves readiness fails closed: it stops the
+compose `db` service, waits for `/api/v1/health` to answer `503` with `postgresql: down`, then
+starts the service again and waits for readiness to return to `200`. It is skipped when the stack
+is not managed by Docker Compose (for example a bare PostgreSQL on `localhost:5432`), because the
+test has no way to stop and restart that database.
+
 ## 6. Verify before pushing
 
 ```bash

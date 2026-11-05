@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from time import perf_counter
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -33,7 +32,11 @@ class HealthService:
         started = perf_counter()
         try:
             await self._session.execute(text("SELECT 1"))
-        except SQLAlchemyError as exc:
+        except Exception as exc:
+            # A readiness probe is a boundary: any failure to run the query means "down". The
+            # asyncpg driver raises raw OSError subclasses (e.g. ConnectionRefusedError) when it
+            # cannot open a connection, and SQLAlchemy re-raises those unwrapped, so catching only
+            # SQLAlchemyError would answer 500 during an outage instead of failing closed with 503.
             logger.warning("database_health_check_failed", extra={"error": type(exc).__name__})
             return DependencyHealth(
                 name="postgresql",
