@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -13,6 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_SERVICE = "db"
 RECOVERY_TIMEOUT = 90
+REQUIRE_COMPOSE_DB_ENV = "NEXA_REQUIRE_COMPOSE_DB"
 
 
 def test_backend_liveness(backend: httpx.Client) -> None:
@@ -101,11 +103,18 @@ def _compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
 
 def _require_compose_database() -> None:
     """Only a stack managed by compose can be taken down and brought back up here."""
+
+    def _unavailable(reason: str) -> None:
+        # CI sets the override so a green pipeline cannot hide a skipped outage check.
+        if os.environ.get(REQUIRE_COMPOSE_DB_ENV):
+            pytest.fail(f"{REQUIRE_COMPOSE_DB_ENV} is set, but {reason}")
+        pytest.skip(reason)
+
     if shutil.which("docker") is None:
-        pytest.skip("docker CLI unavailable; start the compose stack to test database recovery")
+        _unavailable("the docker CLI is unavailable; start the compose stack to test recovery")
     services = _compose("ps", "--services", "--status", "running", check=False)
     if services.returncode != 0 or DB_SERVICE not in services.stdout.split():
-        pytest.skip(f"compose service '{DB_SERVICE}' is not running; run `docker compose up -d`")
+        _unavailable(f"compose service '{DB_SERVICE}' is not running; run `docker compose up -d`")
 
 
 def _wait_for_readiness(
