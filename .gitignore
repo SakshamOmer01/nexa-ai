@@ -48,6 +48,7 @@ env/
 .coverage
 .coverage.*
 coverage.xml
+integration-report.xml
 htmlcov/
 dist/
 site-packages/

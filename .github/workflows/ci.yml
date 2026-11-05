@@ -207,7 +207,16 @@ jobs:
         env:
           # This job owns the compose stack, so the database outage test must run rather than skip.
           NEXA_REQUIRE_COMPOSE_DB: "1"
-        run: pytest tests -q
+        run: pytest tests -q --junitxml=integration-report.xml
+
+      # Per-test outcomes for reviewers who cannot read job logs (they need admin rights).
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: integration-report.xml
+          if-no-files-found: warn
 
       - name: Container logs
         if: failure()

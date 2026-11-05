@@ -164,7 +164,9 @@ compose `db` service, waits for `/api/v1/health` to answer `503` with `postgresq
 starts the service again and waits for readiness to return to `200`. It is skipped when the stack
 is not managed by Docker Compose (for example a bare PostgreSQL on `localhost:5432`), because the
 test has no way to stop and restart that database. Set `NEXA_REQUIRE_COMPOSE_DB=1` to turn that
-skip into a failure; CI sets it so a green pipeline proves the outage path actually ran.
+skip into a failure; CI sets it so a green pipeline proves the outage path actually ran. CI also
+publishes the JUnit report as the `integration-test-results` artifact, so per-test outcomes are
+readable without access to job logs.
 
 ## 6. Verify before pushing
 
