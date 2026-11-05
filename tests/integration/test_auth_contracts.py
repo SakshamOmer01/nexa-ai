@@ -159,7 +159,6 @@ def test_frontend_bff_creates_httponly_session(
 
 def test_proxy_refreshes_an_expired_access_cookie(frontend_url: str) -> None:
     email = unique_email("silent")
-    host = httpx.URL(frontend_url).host
 
     with httpx.Client(base_url=frontend_url, timeout=10.0) as client:
         signup = client.post(
@@ -171,15 +170,29 @@ def test_proxy_refreshes_an_expired_access_cookie(frontend_url: str) -> None:
         refresh_token = client.cookies.get("nexa_refresh_token")
         assert refresh_token
 
-        # Simulate an access token that has outlived its expiry while the refresh token is valid.
-        client.cookies.set("nexa_access_token", "not-a-jwt", domain=host, path="/")
+    # Simulate a browser holding an access token that has outlived its expiry while the refresh
+    # token is still valid. The cookies are sent explicitly on a fresh client so the forged access
+    # cookie cannot collide with the host-only cookie set by signup.
+    dashboard = httpx.get(
+        f"{frontend_url}/dashboard",
+        headers={"Cookie": f"nexa_access_token=not-a-jwt; nexa_refresh_token={refresh_token}"},
+        follow_redirects=False,
+        timeout=10.0,
+    )
+    assert dashboard.status_code == 200
+    assert email in dashboard.text
 
-        dashboard = client.get("/dashboard", follow_redirects=False)
-        assert dashboard.status_code == 200
-        assert email in dashboard.text
-
-        assert client.cookies.get("nexa_access_token") not in {None, "not-a-jwt"}
-        assert client.cookies.get("nexa_refresh_token") not in {None, refresh_token}
+    set_cookies = dashboard.headers.get_list("set-cookie")
+    rotated_access = next(
+        (cookie for cookie in set_cookies if cookie.startswith("nexa_access_token=")), None
+    )
+    rotated_refresh = next(
+        (cookie for cookie in set_cookies if cookie.startswith("nexa_refresh_token=")), None
+    )
+    assert rotated_access is not None
+    assert not rotated_access.startswith("nexa_access_token=not-a-jwt")
+    assert rotated_refresh is not None
+    assert not rotated_refresh.startswith(f"nexa_refresh_token={refresh_token}")
 
 
 def test_frontend_bff_reports_backend_auth_errors(frontend_url: str) -> None:
