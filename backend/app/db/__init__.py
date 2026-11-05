@@ -1,0 +1,6 @@
+"""Persistence layer: declarative base, engine/session lifecycle and migrations."""
+
+from app.db.base import Base
+from app.db.session import Database
+
+__all__ = ["Base", "Database"]
