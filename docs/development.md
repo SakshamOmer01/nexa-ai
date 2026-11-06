@@ -177,11 +177,13 @@ are readable without access to job logs.
 Frontend tests are Vitest suites (`vitest.config.mts`, jsdom, Testing Library), running next to the
 code they cover:
 
-- Components — `Button` (variants, sizes, `asChild`, disabled clicks), `AuthForm` (login/signup
-  payloads, API error detail, unreachable server), `AuthNav` (signed-in vs signed-out chrome),
-  `SignOutButton` (logout request, pending state, redirect), `AuthShell` (page frame and slots),
-  `SiteHeader` (brand, nav, auth slot, external links), `SiteFooter` (links and version) and
-  `HealthStatusPanel` (loading state, healthy rows, unhealthy response, refresh).
+- Components — `Button` (variants, sizes, `asChild`, disabled clicks), `Badge` (variants,
+  `asChild`), `Card`/`Separator` (slots, size, decorative vs announced rules), `AuthForm`
+  (login/signup payloads, API error detail, unreachable server), `AuthNav` (signed-in vs
+  signed-out chrome), `SignOutButton` (logout request, pending state, redirect), `AuthShell` (page
+  frame and slots), `SiteHeader` (brand, nav, auth slot, external links), `SiteFooter` (links and
+  version), `HealthStatusPanel` (loading state, healthy rows, unhealthy response, refresh) and the
+  landing sections `Hero`/`Stack`/`Architecture` (copy, CTAs and config-driven content).
 - Library helpers — `api-client` (URL resolution and slash handling, `no-store`, header merging,
   typed `ApiClientError`, void requests, health fallback), `env` (trimming, `apiOrigin`, fail-fast
   validation), `auth/cookies` (cookie hardening, `Secure` over https, JWT expiry skew),
