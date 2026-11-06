@@ -282,10 +282,10 @@ NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (r
 | ML lint/tests | `cd ml && ruff check . && pytest` | 5 pipeline + registry tests |
 | Frontend lint | `cd frontend && npm run lint` | ESLint (Next config) |
 | Frontend types | `cd frontend && npm run typecheck` | `next typegen` + `tsc --noEmit` |
-| Frontend tests & coverage | `cd frontend && npm test -- --coverage` | 132 Vitest/Testing Library tests in 32 files; 95% statements/branches/functions/lines floor |
+| Frontend tests & coverage | `cd frontend && npm test -- --coverage` | 136 Vitest/Testing Library tests in 32 files; 95% statements/branches/functions/lines floor |
 | Frontend build | `cd frontend && npm run build` | production standalone build |
 | Browser E2E | `cd frontend && npm run test:e2e` | 7 Playwright/Chromium flows: signup, login, wrong password, duplicate signup, cross-origin rejection, silent refresh, logout + revocation; requires a running stack |
-| Integration | `pytest tests` | 18 cross-service tests; requires a running stack |
+| Integration | `pytest tests` | 19 cross-service tests; requires a running stack |
 | PostgreSQL migrations | CI job `backend` | applies Alembic to a real PostgreSQL 17 service |
 | Containers | CI job `integration` | `docker compose config`, cached buildx builds, the stack up plus the same 7 browser flows against it |
 
@@ -341,7 +341,7 @@ Desktop) so a rebuild only redoes the layers that changed:
 | `backend` | ruff, migrations applied to a real PostgreSQL 17 service, the SQLite migration/auth step, app import, pytest |
 | `frontend` | npm ci, ESLint, typecheck, tests with the coverage gate, production build (with a restored `.next` build cache) |
 | `ml` | ruff, pytest |
-| `sqlite` | production build, backend + frontend started as processes on a SQLite file, health gates, the same 18 cross-service tests, then the 7 Playwright browser flows |
+| `sqlite` | production build, backend + frontend started as processes on a SQLite file, health gates, the same 19 cross-service tests, then the 7 Playwright browser flows |
 | `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests including the database-outage path, then the same 7 Playwright browser flows against the container images |
 
 Every suite publishes a JUnit report and a run summary, the frontend job uploads the coverage

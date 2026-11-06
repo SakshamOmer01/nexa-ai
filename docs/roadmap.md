@@ -34,17 +34,17 @@ the current `main`:
 | Suite | Tests | What it proves |
 | --- | --- | --- |
 | Backend (`pytest backend/tests`) | 70 | Auth contracts, refresh rotation/replay/logout, config guards, security helpers, health/readiness, timestamps, rate limiting, SQLite migrations |
-| Frontend (`npm test`) | 132 in 32 files | Every App Router page and route handler, all UI components, API client, env validation, cookie/session helpers, BFF credential and CSRF behaviour, and `proxy.ts` |
+| Frontend (`npm test`) | 136 in 32 files | Every App Router page and route handler, all UI components, API client, env validation, cookie/session helpers, BFF credential and CSRF behaviour, and `proxy.ts` |
 | ML workspace | 5 | Pipeline contract and registry |
-| Cross-service integration | 18 | Running-stack API, BFF cookies, silent refresh, dashboard redirect, readiness degradation; run twice in CI (Compose and SQLite) |
+| Cross-service integration | 19 | Running-stack API, BFF cookies, same-origin BFF signup, silent refresh, dashboard redirect, readiness degradation; run twice in CI (Compose and SQLite) |
 | Browser E2E (`npm run test:e2e`) | 7 | Real Chromium: signup, login, wrong password, duplicate signup, cross-origin auth rejection, silent refresh with an invalidated access cookie, logout + server-side revocation; run twice in CI (Compose and SQLite) |
-| **Total** | **232** | — |
+| **Total** | **237** | — |
 
 Frontend coverage is measured over all of `src/**` and gated at 95% statements, branches, functions
 and lines. Current totals: **100% statements, 98.87% branches, 100% functions, 100% lines**. The
 coverage report is uploaded by CI.
 
-This replaces the earlier claim that the frontend had no component tests: it now has 132 of them,
+This replaces the earlier claim that the frontend had no component tests: it now has 136 of them,
 covering every route and component. The frontend tests live next to the code they cover
 (`src/**/*.test.ts(x)`), not in a separate `__tests__` tree.
 

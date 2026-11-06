@@ -164,6 +164,40 @@ def test_frontend_bff_creates_httponly_session(
     assert revoked.status_code == 401
 
 
+def test_frontend_bff_accepts_a_same_origin_signup(frontend_url: str) -> None:
+    """A browser POST carries ``Origin``, so it must match the host the client addressed.
+
+    The frontend container binds ``0.0.0.0``. When the expected origin was derived from that bind
+    address instead of the ``Host`` header, every browser signup, login, refresh and logout was
+    refused with ``csrf_rejected``; the browser job caught it, and this keeps the same contract
+    visible to the HTTP suite, which otherwise sends no ``Origin`` at all.
+    """
+    origin = frontend_url
+    email = unique_email("same-origin")
+
+    with httpx.Client(base_url=frontend_url, timeout=10.0) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": PASSWORD, "full_name": "Same Origin User"},
+            headers={"Origin": origin, "Sec-Fetch-Site": "same-origin"},
+        )
+
+        assert signup.status_code == 201, signup.text
+        assert signup.json()["user"]["email"] == email
+        cookies = signup.headers.get_list("set-cookie")
+        assert any("nexa_access_token=" in cookie for cookie in cookies)
+
+        # Still a CSRF defence, not an open door: a foreign Origin is refused before the API call.
+        rejected = client.post(
+            "/api/auth/signup",
+            json={"email": unique_email("cross-origin"), "password": PASSWORD},
+            headers={"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+        )
+        assert rejected.status_code == 403
+        assert rejected.json()["error"]["code"] == "csrf_rejected"
+        assert "set-cookie" not in rejected.headers
+
+
 def test_frontend_bff_signup_persists_orm_timestamps(frontend_url: str) -> None:
     """The BFF signup must store the timestamps the ORM supplies, not rely on the database.
 
