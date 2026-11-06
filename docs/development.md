@@ -43,6 +43,10 @@ Authentication settings:
 - `ACCESS_TOKEN_EXPIRE_MINUTES` controls the access-token and access-cookie lifetime.
 - `REFRESH_TOKEN_EXPIRE_DAYS` controls how long a session family can be refreshed; logout or replay
   detection revokes it earlier.
+- `AUTH_RATE_LIMIT_ATTEMPTS` (default 20) and `AUTH_RATE_LIMIT_WINDOW_SECONDS` (default 60) set the
+  per-identity budget for login/signup/refresh; `RATE_LIMIT_ENABLED=false` disables it. Buckets are
+  in process memory, so each API replica counts separately — see
+  [docs/phase-1.md](phase-1.md#4-phase-1-vs-phase-2-decisions).
 - The web tier marks both session cookies `Secure` when `NEXT_PUBLIC_SITE_URL` starts with `https`.
   Keep it on `http://localhost:3000` for local development so the cookies are accepted over http.
 - Signup requires a password of 8–128 characters; emails are stored lower-cased.
@@ -186,6 +190,9 @@ cd ml && ../.venv/bin/python -m pytest
 # Frontend component tests (Vitest + Testing Library, jsdom)
 cd frontend && npm test
 
+# Frontend tests with the 95% coverage gate
+cd frontend && npm test -- --coverage
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt
@@ -251,10 +258,25 @@ published.
 
 ```bash
 ./scripts/verify.sh
+
+# Cross-service suite (start ./scripts/dev.sh or docker compose up -d first)
+NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh
 ```
 
-Runs the same gates as CI: ruff lint/format, backend + ML tests, PostgreSQL migration SQL
-generation, ESLint, TypeScript, frontend tests, the production build and `docker compose config`.
+The script runs: ruff lint/format and the full backend suite; the dedicated SQLite migrations/auth
+step; PostgreSQL DDL generation (`alembic upgrade head --sql`); ML lint/format/tests; ESLint;
+TypeScript; frontend tests with the coverage thresholds from `vitest.config.mts`; the production
+build; and `docker compose config` when Docker is installed.
+
+It does **not** reproduce everything CI does. CI also applies the migrations to a live PostgreSQL 17
+service, builds both images with a buildx layer cache, starts the Compose stack and runs the
+integration suite twice (Compose and SQLite process stacks), publishes JUnit/coverage artifacts and
+renders the run summary. A green `./scripts/verify.sh` is necessary but not sufficient for a green
+pipeline. The integration flag above covers the cross-service suite locally when a stack is running;
+the PostgreSQL migration apply and image builds remain CI-only.
+
+`make verify` is an alias for this script. `make test` runs only the backend and ML suites; run
+`cd frontend && npm test` (or `npm run test:coverage`) for the web app.
 
 ## 7. Frontend notes
 

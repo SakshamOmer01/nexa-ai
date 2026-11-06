@@ -73,13 +73,19 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8000/api/v1/auth/logo
   -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH\"}"   # 204
 ```
 
+- Login, signup and refresh are rate limited per identity (account email, or token digest for
+  refresh) and answer `429` with `Retry-After`; see `app/core/rate_limit.py` and the
+  `AUTH_RATE_LIMIT_*` settings. Buckets are per API process.
+
 Tests: `pytest tests/test_auth.py tests/test_refresh_tokens.py` covers registration, duplicate
 emails, hashing, token rejection (expired, forged, malformed), deactivated accounts, rotation,
 concurrency grace, replay revocation, logout and password/token redaction.
+`tests/test_rate_limit.py` covers the credential-endpoint budget and its error contract.
 
 ## Quality gates
 
 ```bash
 ruff check . && ruff format --check .
 pytest
+pytest tests/test_sqlite_migrations.py   # real migrations + auth flow on SQLite
 ```

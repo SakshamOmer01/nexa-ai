@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { apiRequestVoid } from "@/lib/api-client";
+import { rejectCrossOrigin } from "@/lib/auth/csrf";
 import { clearSessionTokens, getRefreshToken } from "@/lib/auth/session";
 
 /**
@@ -9,7 +10,12 @@ import { clearSessionTokens, getRefreshToken } from "@/lib/auth/session";
  * Logging out locally must always succeed, so an unreachable API is tolerated: the refresh token
  * then stays valid until it expires, but this browser can no longer use it.
  */
-export async function POST(): Promise<NextResponse> {
+export async function POST(request: Request): Promise<NextResponse> {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) {
+    return crossOrigin;
+  }
+
   const refreshToken = await getRefreshToken();
 
   if (refreshToken) {

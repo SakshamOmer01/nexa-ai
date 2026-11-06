@@ -12,9 +12,10 @@ error envelope and a ``WWW-Authenticate: Bearer`` challenge.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, Response, status
 
-from app.api.deps import AuthServiceDep, CurrentUserDep
+from app.api.deps import AuthServiceDep, CurrentUserDep, enforce_auth_rate_limit
+from app.core.security import hash_refresh_token
 from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
@@ -38,7 +39,8 @@ _REFRESH_REJECTED = {401: {"description": "Invalid, expired, revoked or replayed
     description="Register an email/password account and return an access/refresh token pair.",
     responses={409: {"description": "Email already registered"}},
 )
-async def signup(payload: SignupRequest, auth: AuthServiceDep) -> TokenResponse:
+async def signup(payload: SignupRequest, auth: AuthServiceDep, request: Request) -> TokenResponse:
+    enforce_auth_rate_limit(request, scope="signup", identity=payload.email)
     return await auth.register(payload)
 
 
@@ -49,7 +51,10 @@ async def signup(payload: SignupRequest, auth: AuthServiceDep) -> TokenResponse:
     description="Verify email and password and return an access/refresh token pair.",
     responses=_UNAUTHORIZED,
 )
-async def login(payload: LoginRequest, auth: AuthServiceDep) -> TokenResponse:
+async def login(payload: LoginRequest, auth: AuthServiceDep, request: Request) -> TokenResponse:
+    # Keyed on the account, not the client address: the web BFF calls the API server-side, so every
+    # browser would otherwise share the frontend container's address.
+    enforce_auth_rate_limit(request, scope="login", identity=payload.email)
     return await auth.authenticate(payload.email, payload.password)
 
 
@@ -63,7 +68,13 @@ async def login(payload: LoginRequest, auth: AuthServiceDep) -> TokenResponse:
     ),
     responses=_REFRESH_REJECTED,
 )
-async def refresh(payload: RefreshTokenRequest, auth: AuthServiceDep) -> TokenResponse:
+async def refresh(
+    payload: RefreshTokenRequest, auth: AuthServiceDep, request: Request
+) -> TokenResponse:
+    # One bucket per presented token: rotation returns a new token and therefore a fresh budget.
+    enforce_auth_rate_limit(
+        request, scope="refresh", identity=hash_refresh_token(payload.refresh_token)
+    )
     return await auth.refresh(payload.refresh_token)
 
 

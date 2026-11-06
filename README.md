@@ -21,7 +21,7 @@ of these boundaries instead of reshaping them.
 | --- | --- | --- | --- |
 | Web application | Next.js 16 (App Router, RSC), TypeScript, Tailwind CSS v4, shadcn/ui | [`frontend/`](frontend) | Yes (Node standalone) |
 | API | FastAPI, Pydantic v2, SQLAlchemy 2.0 async, Alembic | [`backend/`](backend) | Yes (Uvicorn) |
-| Database | PostgreSQL 17 | `docker-compose.yml` | Yes (managed in prod) |
+| Database | PostgreSQL 17 (SQLite for local dev/tests) | `docker-compose.yml` | Yes (managed in prod) |
 | ML workspace | Python package: pipeline contract + registry | [`ml/`](ml) | Library |
 | Delivery | Multi-stage Docker, Docker Compose, GitHub Actions | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | — |
 
@@ -76,7 +76,7 @@ nexa-ai/
 │   ├── alembic/              # migrations
 │   └── tests/                # unit & contract tests
 ├── ml/                       # ML workspace (pipelines, registry, settings)
-├── docs/                     # architecture, development guide, ADRs
+├── docs/                     # architecture, development guide, Phase 1 criteria, ADRs
 ├── scripts/                  # bootstrap, dev, verify, wait-for-http
 ├── tests/                    # cross-service integration tests
 ├── .github/workflows/        # CI pipeline
@@ -113,13 +113,19 @@ cp .env.example .env
 ./scripts/dev.sh              # db (docker), migrations, API :8000, web :3000
 ```
 
+No PostgreSQL (or Docker)? Point `DATABASE_URL` in `backend/.env` at a SQLite file
+(`sqlite+aiosqlite:///./dev.db`), run `cd backend && ../.venv/bin/alembic upgrade head`, then start
+the API and web app as usual. The SQLite path is for local development and tests only — see
+[Run without PostgreSQL](docs/development.md#run-without-postgresql-sqlite) for the exact commands
+and its limitations.
+
 ### Make targets
 
 ```bash
 make help        # list targets
 make bootstrap   # install everything
 make dev         # run the stack locally
-make verify      # every quality gate (same commands as CI)
+make verify      # local gates that mirror CI (no image builds or staged stack)
 make up / down   # docker compose stack
 ```
 
@@ -136,13 +142,16 @@ Environment templates live next to the code that reads them:
 | `ENVIRONMENT` | `development` | `development`, `test`, `staging`, `production` |
 | `DEBUG` | `false` | Must be `false` in production |
 | `SECRET_KEY` | dev placeholder | 32+ unique characters required in production |
-| `DATABASE_URL` | local asyncpg URL | Must use `postgresql+asyncpg://` |
-| `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | `5` / `10` | Tune with replica count |
+| `DATABASE_URL` | `postgresql+asyncpg://nexa:nexa@localhost:5432/nexa` | Async driver required: `postgresql+asyncpg://`, or `sqlite+aiosqlite://` for local dev/tests |
+| `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | `5` / `10` | Tune with replica count; ignored by SQLite |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated, explicit origins |
 | `LOG_LEVEL` | `INFO` | JSON logs in containers |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT lifetime in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh-token family lifetime in days |
 | `JWT_ALGORITHM` | `HS256` | Signing algorithm; tokens are validated against this value |
+| `RATE_LIMIT_ENABLED` | `true` | Credential-endpoint limiter; set `false` only for controlled tests |
+| `AUTH_RATE_LIMIT_ATTEMPTS` | `20` | Per-identity budget for login/signup/refresh |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Fixed window for the budget; buckets are per API process |
 
 **Frontend**:
 
@@ -159,6 +168,8 @@ Configuration rules:
 - `NEXT_PUBLIC_*` is inlined at build time — never a secret.
 - Production start-up fails if the secret is a placeholder, `DEBUG=true`, or CORS is `*`.
 - Interactive API docs are disabled in production unless `DOCS_ENABLED=true`.
+- SQLite (`sqlite+aiosqlite://`) is a local-development and test engine; PostgreSQL is the source
+  of truth for deployed environments.
 
 ## API and health checks
 
@@ -169,13 +180,13 @@ Configuration rules:
 | `GET` | `/api/v1/health` | Readiness incl. PostgreSQL | `200` `ok` | `503` `degraded` |
 | `GET` | `/api/v1/health/live` | Versioned liveness | `200` | — |
 | `GET` | `/docs`, `/openapi.json` | Interactive docs / schema | `200` | disabled in prod |
-| `POST` | `/api/v1/auth/signup` | Create an account, return a bearer token | `201` | `409` email taken · `422` invalid input |
-| `POST` | `/api/v1/auth/login` | Exchange credentials for a token pair | `200` | `401` invalid credentials |
-| `POST` | `/api/v1/auth/refresh` | Rotate a refresh token (single use) | `200` | `401` invalid/expired/replayed |
+| `POST` | `/api/v1/auth/signup` | Create an account, return a bearer token | `201` | `409` email taken · `422` invalid input · `429` rate limited |
+| `POST` | `/api/v1/auth/login` | Exchange credentials for a token pair | `200` | `401` invalid credentials · `429` rate limited |
+| `POST` | `/api/v1/auth/refresh` | Rotate a refresh token (single use) | `200` | `401` invalid/expired/replayed · `429` rate limited |
 | `POST` | `/api/v1/auth/logout` | Revoke the refresh-token family | `204` | — (idempotent) |
 | `GET` | `/api/v1/auth/me` | Protected profile (requires bearer token) | `200` | `401` missing/invalid token |
-| `POST` | `/api/auth/signup`, `/api/auth/login` | **Web** BFF: sets both httpOnly session cookies | `201` / `200` | forwarded `4xx` |
-| `POST` | `/api/auth/logout` | **Web** revokes the family and clears both cookies | `200` | — |
+| `POST` | `/api/auth/signup`, `/api/auth/login` | **Web** BFF: sets both httpOnly session cookies | `201` / `200` | forwarded `4xx` · `403` cross-origin |
+| `POST` | `/api/auth/logout` | **Web** revokes the family and clears both cookies | `200` | `403` cross-origin |
 | `GET` | `/api/health` | **Web** liveness + backend/DB status | `200` | `200` `degraded` |
 
 ```bash
@@ -232,6 +243,9 @@ Failure rules:
 - Login always returns the same `401 Invalid email or password.` (plus `WWW-Authenticate: Bearer`)
   for unknown emails, wrong passwords and deactivated accounts, so the API does not leak which
   emails exist.
+- Login, signup and refresh return `429` with `Retry-After` once the per-identity rate-limit budget
+  is spent (`AUTH_RATE_LIMIT_ATTEMPTS` per `AUTH_RATE_LIMIT_WINDOW_SECONDS`, per API process).
+  Cross-origin POSTs to `/api/auth/*` are rejected with `403 csrf_rejected` by the web tier.
 - Signup returns `409` for a duplicate email and `422` for invalid input; validation messages never
   echo password values.
 - Protected routes reject missing, malformed, expired and wrongly signed tokens with `401`.
@@ -252,20 +266,41 @@ optimistically there and authoritatively by the API call behind it.
 ## Testing & quality gates
 
 ```bash
-make verify            # everything CI runs
+make verify                                     # local gates that mirror CI
+cd frontend && npm test -- --coverage           # frontend suite + coverage floor
+NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (running stack)
 ```
 
 | Gate | Command | Scope |
 | --- | --- | --- |
 | Backend lint/format | `cd backend && ruff check . && ruff format --check .` | Ruff (E/F/W/I/UP/B/SIM/ASYNC/RUF) |
-| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | health, config, security, auth and refresh-token rotation (SQLite-backed) |
-| Migration DDL | `cd backend && ../.venv/bin/alembic upgrade head --sql` | PostgreSQL dialect |
-| ML lint/tests | `cd ml && ruff check . && pytest` | pipeline + registry |
+| Backend tests | `cd backend && ../.venv/bin/python -m pytest` | 70 tests: health, config, security, auth, refresh-token rotation, rate limiting and timestamps (in-memory SQLite) |
+| SQLite migrations | `cd backend && ../.venv/bin/python -m pytest tests/test_sqlite_migrations.py` | 3 tests: real migrations + auth flow on a SQLite file (own CI step) |
+| Migration DDL | `cd backend && ../.venv/bin/alembic upgrade head --sql` | PostgreSQL dialect, generated without a database |
+| ML lint/tests | `cd ml && ruff check . && pytest` | 5 pipeline + registry tests |
 | Frontend lint | `cd frontend && npm run lint` | ESLint (Next config) |
 | Frontend types | `cd frontend && npm run typecheck` | `next typegen` + `tsc --noEmit` |
+| Frontend tests & coverage | `cd frontend && npm test -- --coverage` | 132 Vitest/Testing Library tests in 32 files; 95% statements/branches/functions/lines floor |
 | Frontend build | `cd frontend && npm run build` | production standalone build |
-| Integration | `pytest tests` | requires a running stack |
-| Containers | `docker compose config` + CI buildx build | Compose + cached image builds |
+| Integration | `pytest tests` | 18 cross-service tests; requires a running stack |
+| PostgreSQL migrations | CI job `backend` | applies Alembic to a real PostgreSQL 17 service |
+| Containers | CI job `integration` | `docker compose config` + cached buildx builds |
+
+`make verify` and `scripts/verify.sh` run the backend lint/tests, the dedicated SQLite migration
+step, PostgreSQL DDL generation, ML lint/tests, frontend lint/typecheck/tests-with-coverage and the
+production build, plus `docker compose config` when Docker is installed. They do **not** apply
+migrations to a live PostgreSQL server, build container images or start a staged stack; those are
+the CI jobs `backend` and `integration`. A green `make verify` is therefore necessary but not
+sufficient for a green pipeline — start the stack and run
+`NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh` to cover the cross-service suite locally.
+
+Frontend coverage is measured over every file in `src/**` (not only imported modules) and enforced
+by `vitest.config.mts`. The current totals are 100% statements, 98.87% branches, 100% functions and
+100% lines, so a new untested module lowers the score. Test locations: `backend/tests/`,
+`frontend/src/**/*.test.ts(x)`, `ml/tests/` and `tests/integration/`.
+
+See [docs/phase-1.md](docs/phase-1.md) for the Phase 1 acceptance criteria and the reasoning behind
+the deferred features.
 
 ## Docker
 
@@ -299,12 +334,14 @@ Desktop) so a rebuild only redoes the layers that changed:
 
 | Job | Verifies |
 | --- | --- |
-| `backend` | ruff, migrations applied to a real PostgreSQL 17 service, app import, pytest |
-| `frontend` | npm ci, ESLint, typecheck, production build (with a restored `.next` build cache) |
+| `backend` | ruff, migrations applied to a real PostgreSQL 17 service, the SQLite migration/auth step, app import, pytest |
+| `frontend` | npm ci, ESLint, typecheck, tests with the coverage gate, production build (with a restored `.next` build cache) |
 | `ml` | ruff, pytest |
-| `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests |
+| `sqlite` | production build, backend + frontend started as processes on a SQLite file, health gates, the same 18 cross-service tests |
+| `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests including the database-outage path |
 
-The container job is the one that used to rebuild from scratch on every run. It now builds both
+Every suite publishes a JUnit report and a run summary, and the frontend job uploads the coverage
+report. The container job is the one that used to rebuild from scratch on every run. It now builds both
 images with `docker/build-push-action` on a `docker/setup-buildx-action` builder and exports the
 layers to the GitHub Actions cache (`type=gha`, `mode=max`, one scope per image). A run that only
 touches application code reuses the dependency layers, so the stack starts from warm images; the
@@ -313,7 +350,8 @@ branch and are subject to GitHub's 10 GB repository limit; the two scopes are in
 ejected frontend layer never invalidates the backend's.
 
 Deployment is intentionally not wired to an environment yet; the images and probes are ready for any
-orchestrator.
+orchestrator. Choosing the target, secret store and rollback process is Phase 2 work (see
+[docs/phase-1.md](docs/phase-1.md#phase-2-backlog-explicitly-not-phase-1)).
 
 ## Security
 
@@ -326,6 +364,11 @@ orchestrator.
 - Access and refresh tokens live in httpOnly, SameSite=Lax cookies on the web tier — never in
   `localStorage` or client state — and are only ever sent to the API server-side. Refresh tokens are
   stored as SHA-256 digests and revoked on rotation, replay or logout.
+- Login, signup and refresh are rate limited per identity (account email, or token digest for
+  refresh) with a configurable fixed window and `429`/`Retry-After` responses. Buckets are per API
+  process; distributed limiting is Phase 2.
+- Every state-changing BFF route rejects cross-origin requests (`Origin` must match the site,
+  `Sec-Fetch-Site` must be `same-origin` or `none`) on top of SameSite=Lax cookies.
 - Database access is parameterised through SQLAlchemy; connections are pooled with pre-ping.
 
 ## Roadmap
@@ -339,13 +382,18 @@ Delivered:
 - Rotating, digest-stored refresh tokens with per-login families, reuse detection and revocation on
   logout — sessions survive access-token expiry without long-lived JWTs. Each login has its own
   family, so signing out of one browser does not touch another; the family is the session boundary.
+- Credential-endpoint rate limiting (per account/token) and explicit CSRF origin checks on the BFF.
 - Cache-friendly images and a cached container pipeline: dependency/source layer split, BuildKit
   cache mounts and a GitHub Actions layer cache shared by both images.
 
-Next (see [docs/roadmap.md](docs/roadmap.md) for the detailed status):
+Next (see [docs/roadmap.md](docs/roadmap.md) and [docs/phase-1.md](docs/phase-1.md) for the detailed
+status and Phase 2 decisions):
 
-- Login/refresh rate limiting, email verification and password reset
+- Distributed rate limiting with a shared store and trusted client-IP policy
+- Email verification and password reset
 - Device metadata for sessions plus a session list/revoke UI (families exist, device labels do not)
+- Immediate access-token revocation and "sign out everywhere"
+- Browser end-to-end tests (Playwright) and deployment automation
 - Multi-tenant workspaces and API keys
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
@@ -356,6 +404,7 @@ Next (see [docs/roadmap.md](docs/roadmap.md) for the detailed status):
 
 - [Architecture](docs/architecture.md)
 - [Development guide](docs/development.md)
+- [Phase 1 acceptance criteria](docs/phase-1.md)
 - [Roadmap and known gaps](docs/roadmap.md)
 - [ADR 0001 — Monorepo foundation](docs/adr/0001-monorepo-architecture.md)
 - [ADR 0002 — JWT authentication](docs/adr/0002-jwt-authentication.md)

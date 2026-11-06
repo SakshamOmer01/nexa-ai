@@ -45,9 +45,14 @@ See [ADR 0002](../docs/adr/0002-jwt-authentication.md) and
 
 ```bash
 npm run lint
-npm run typecheck   # next typegen && tsc --noEmit
-npm run build       # production standalone build
+npm run typecheck        # next typegen && tsc --noEmit
+npm test -- --coverage   # Vitest + Testing Library, 95% coverage floor
+npm run build            # production standalone build
 ```
+
+Tests sit next to the code they cover (`src/**/*.test.ts(x)`) and run in jsdom with `fetch`,
+`next/navigation` and env values stubbed per file. State-changing BFF routes also reject
+cross-origin requests (`src/lib/auth/csrf.ts`).
 
 > `output: "standalone"` is enabled for Docker. For a local production preview use the standalone
 > server (`node .next/standalone/server.js`) or accept the warning from `next start`.

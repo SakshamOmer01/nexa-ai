@@ -177,6 +177,10 @@ for the reasoning and rejected alternatives.
   projection of the model.
 - Access and refresh tokens stay server-side in httpOnly cookies — never in browser storage or RSC
   props. Refresh tokens are stored as digests and revoked on rotation, replay or logout.
+- Login, signup and refresh share a per-identity fixed-window budget (`app/core/rate_limit.py`)
+  answering `429` with `Retry-After`. Buckets are per process; a shared store is Phase 2.
+- The BFF rejects state-changing requests whose `Origin` is not this site or whose `Sec-Fetch-Site`
+  is not `same-origin`/`none`, as defence in depth on top of SameSite=Lax cookies.
 - Secrets come from the environment/secret manager; `.env` files are git-ignored.
 - Database access is pooled and parameterised through SQLAlchemy; no string-built SQL.
 

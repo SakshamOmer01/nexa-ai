@@ -21,6 +21,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
+from app.core.rate_limit import FixedWindowRateLimiter
 from app.db.session import Database
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = config
     app.state.db = database
+    app.state.rate_limiter = FixedWindowRateLimiter()
     app.state.started_at_monotonic = time.monotonic()
 
     # Outermost middleware is added last: CORS → request context → security headers.

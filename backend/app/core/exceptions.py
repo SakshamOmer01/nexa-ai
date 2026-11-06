@@ -62,6 +62,17 @@ class ConflictError(AppError):
     code = "conflict"
 
 
+class RateLimitedError(AppError):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    code = "rate_limited"
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many requests. Try again later.",
+            headers={"Retry-After": str(max(1, retry_after_seconds))},
+        )
+
+
 _HTTP_ERROR_CODES = {
     400: "bad_request",
     401: "unauthorized",

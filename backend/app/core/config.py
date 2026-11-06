@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=30, ge=1, le=60 * 24 * 30)
     refresh_token_expire_days: int = Field(default=30, ge=1, le=365)
+    # Per-identity budget for the credential endpoints (login, signup, refresh). Buckets live in
+    # process memory, so this is a single-instance control until Phase 2 moves it to a shared
+    # store; see docs/phase-1.md.
+    rate_limit_enabled: bool = True
+    auth_rate_limit_attempts: int = Field(default=20, ge=1, le=10_000)
+    auth_rate_limit_window_seconds: int = Field(default=60, ge=1, le=86_400)
 
     # --- Persistence --------------------------------------------------------------------
     database_url: str = "postgresql+asyncpg://nexa:nexa@localhost:5432/nexa"

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiClientError, apiRequest } from "@/lib/api-client";
 import type { AuthSession, AuthTokenResponse } from "@/types/api";
 
+import { rejectCrossOrigin } from "./csrf";
 import { setSessionTokens } from "./session";
 
 /**
@@ -28,6 +29,11 @@ export async function handleCredentials(
   path: CredentialPath,
   request: Request,
 ): Promise<NextResponse> {
+  const crossOrigin = rejectCrossOrigin(request);
+  if (crossOrigin) {
+    return crossOrigin;
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();

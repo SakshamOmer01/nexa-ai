@@ -16,7 +16,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, RateLimitedError
+from app.core.rate_limit import FixedWindowRateLimiter
 from app.core.security import TokenError, decode_access_token
 from app.db.session import Database
 from app.schemas.auth import UserResponse
@@ -37,6 +38,31 @@ def get_app_settings(request: Request) -> Settings:
 
 def get_database(request: Request) -> Database:
     return request.app.state.db  # type: ignore[no-any-return]
+
+
+def get_rate_limiter(request: Request) -> FixedWindowRateLimiter:
+    """Return the limiter bound to this application instance."""
+    return request.app.state.rate_limiter  # type: ignore[no-any-return]
+
+
+def enforce_auth_rate_limit(request: Request, *, scope: str, identity: str) -> None:
+    """Spend one unit of a credential endpoint's per-identity budget.
+
+    Raise ``RateLimitedError`` (HTTP 429 with ``Retry-After``) when the budget is exhausted. The
+    identity is hashed or normalised by the caller; it never reaches a log line.
+    """
+    settings: Settings = request.app.state.settings  # type: ignore[no-any-return]
+    if not settings.rate_limit_enabled:
+        return
+
+    limiter: FixedWindowRateLimiter = request.app.state.rate_limiter  # type: ignore[no-any-return]
+    decision = limiter.hit(
+        f"{scope}:{identity}",
+        limit=settings.auth_rate_limit_attempts,
+        window_seconds=settings.auth_rate_limit_window_seconds,
+    )
+    if not decision.allowed:
+        raise RateLimitedError(retry_after_seconds=decision.retry_after_seconds)
 
 
 async def get_db_session(

@@ -52,6 +52,22 @@ describe("handleCredentials", () => {
     mockedSetSessionTokens.mockReset();
   });
 
+  it("rejects a cross-origin post before reading the body or calling the backend", async () => {
+    const response = await handleCredentials(
+      "auth/login",
+      new Request("http://localhost:3000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+        body: JSON.stringify({ email: "ada@example.com", password: "correct-horse" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await bodyOf(response)).toMatchObject({ error: { code: "csrf_rejected" } });
+    expect(mockedApiRequest).not.toHaveBeenCalled();
+    expect(mockedSetSessionTokens).not.toHaveBeenCalled();
+  });
+
   it("rejects a body that is not JSON without touching the backend", async () => {
     const response = await handleCredentials(
       "auth/login",
