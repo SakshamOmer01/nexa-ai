@@ -205,10 +205,15 @@ is not managed by Docker Compose (for example a bare PostgreSQL on `localhost:54
 test has no way to stop and restart that database. Set `NEXA_REQUIRE_COMPOSE_DB=1` to turn that
 skip into a failure; CI sets it so a green pipeline proves the outage path actually ran.
 
+CI also runs this suite against a SQLite-backed stack (`SQLite stack — services + integration
+tests`): the migrations, both services started as processes and the same tests, so the BFF and proxy
+paths are covered without Docker. The compose-only outage test skips there, and the container job
+keeps proving it.
+
 CI runs every suite with a JUnit reporter and publishes each report as an artifact
-(`backend-test-results`, `ml-test-results`, `frontend-test-results`, `integration-test-results`),
-then renders any failed, errored or skipped cases into the job's run summary, so per-test outcomes
-are readable without access to job logs.
+(`backend-test-results`, `ml-test-results`, `frontend-test-results`, `integration-test-results`,
+`sqlite-integration-test-results`), then renders any failed, errored or skipped cases into the
+job's run summary, so per-test outcomes are readable without access to job logs.
 
 Frontend tests are Vitest suites (`vitest.config.mts`, jsdom, Testing Library), running next to the
 code they cover:
