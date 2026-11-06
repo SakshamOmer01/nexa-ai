@@ -193,6 +193,11 @@ code they cover:
   fresh, rotation of an expiring session (new cookies stored *and* forwarded to the current render
   without dropping unrelated cookies), cookies kept when a refresh fails, optimistic
   `/dashboard` protection, and the matcher's API/static-asset exclusions.
+- Route handlers — `api/auth/login` and `api/auth/signup` delegate to the shared credential proxy
+  with the right backend path and return its response untouched; `api/auth/logout` revokes the
+  session family with a 5 s timeout, skips the round trip without a refresh token, and still clears
+  the cookies when the backend is unreachable; `api/health` reports `ok`/`degraded`, folds backend
+  dependencies in, and keeps a 200 with `no-store` while the backend is down.
 
 `npm test` runs them; CI adds `--reporter=junit --outputFile=test-results.xml` so the report can be
 published.
