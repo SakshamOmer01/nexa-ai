@@ -189,6 +189,10 @@ code they cover:
   validation), `auth/cookies` (cookie hardening, `Secure` over https, JWT expiry skew),
   `auth/session` (token cookies, `/auth/me` lookup, graceful signed-out fallback), `auth/bff`
   (status codes, token storage, backend error mapping) and `cn` (class merging).
+- Middleware — `proxy.ts` drives real `NextRequest` objects: no refresh while the access token is
+  fresh, rotation of an expiring session (new cookies stored *and* forwarded to the current render
+  without dropping unrelated cookies), cookies kept when a refresh fails, optimistic
+  `/dashboard` protection, and the matcher's API/static-asset exclusions.
 
 `npm test` runs them; CI adds `--reporter=junit --outputFile=test-results.xml` so the report can be
 published.
