@@ -14,7 +14,7 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   // One worker: every test writes to the same SQLite file in CI, where concurrent signups can
-  // contend for the write lock. There are only four short flows.
+  // contend for the write lock. There are only seven short flows.
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

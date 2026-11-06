@@ -225,8 +225,9 @@ paths are covered without Docker. The compose-only outage test skips there, and 
 keeps proving it.
 
 The same SQLite job then runs the Playwright suite in `frontend/e2e/` against those running services.
-It covers signup, login, dashboard rendering, silent refresh after the access cookie is invalidated,
-and logout (cookie clearing plus server-side refresh-token revocation). Playwright targets
+It covers signup, login, dashboard rendering, wrong-password and duplicate-signup rejections,
+cross-origin auth rejection, silent refresh after the access cookie is invalidated, and logout
+(cookie clearing plus server-side refresh-token revocation). Playwright targets
 `http://localhost:3000` by default because the BFF compares `Origin` with Next's canonical request
 origin; `E2E_BASE_URL` and `E2E_API_URL` override the defaults. Install Chromium once locally with
 `cd frontend && npx playwright install chromium`.

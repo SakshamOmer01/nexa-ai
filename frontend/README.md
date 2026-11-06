@@ -59,8 +59,9 @@ Tests sit next to the code they cover (`src/**/*.test.ts(x)`) and run in jsdom w
 `next/navigation` and env values stubbed per file. State-changing BFF routes also reject
 cross-origin requests (`src/lib/auth/csrf.ts`).
 
-`e2e/auth.spec.ts` adds four real-browser flows: signup, login, silent refresh after the access
-cookie is invalidated, and logout (cookie clearing plus refresh-token revocation). They use
+`e2e/auth.spec.ts` adds seven real-browser flows: signup, login, wrong-password rejection,
+duplicate-email signup, cross-origin auth rejection, silent refresh after the access cookie is
+invalidated, and logout (cookie clearing plus refresh-token revocation). They use
 Chromium against `http://localhost:3000` by default; set `E2E_BASE_URL` and `E2E_API_URL` for a
 different stack. The CI `sqlite` job installs Chromium and runs the same command after its
 integration tests, reusing the services it already started.

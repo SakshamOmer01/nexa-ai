@@ -37,8 +37,8 @@ the current `main`:
 | Frontend (`npm test`) | 132 in 32 files | Every App Router page and route handler, all UI components, API client, env validation, cookie/session helpers, BFF credential and CSRF behaviour, and `proxy.ts` |
 | ML workspace | 5 | Pipeline contract and registry |
 | Cross-service integration | 18 | Running-stack API, BFF cookies, silent refresh, dashboard redirect, readiness degradation; run twice in CI (Compose and SQLite) |
-| Browser E2E (`npm run test:e2e`) | 4 | Real Chromium: signup, login, dashboard, silent refresh with an invalidated access cookie, logout + server-side revocation |
-| **Total** | **229** | — |
+| Browser E2E (`npm run test:e2e`) | 7 | Real Chromium: signup, login, wrong password, duplicate signup, cross-origin auth rejection, silent refresh with an invalidated access cookie, logout + server-side revocation |
+| **Total** | **232** | — |
 
 Frontend coverage is measured over all of `src/**` and gated at 95% statements, branches, functions
 and lines. Current totals: **100% statements, 98.87% branches, 100% functions, 100% lines**. The

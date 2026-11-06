@@ -90,6 +90,61 @@ test("login signs in an existing account", async ({ page, request, context }) =>
   expect(access?.httpOnly).toBe(true);
 });
 
+test("a wrong password is rejected without creating a session", async ({
+  page,
+  request,
+  context,
+}) => {
+  const email = uniqueEmail("wrong-password");
+  await createAccount(request, email, "Mary Jackson");
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("definitely-not-the-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  // Scope to the form: Next.js also renders a route-announcer element with role="alert".
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Invalid email or password.",
+  );
+  await expect(page).toHaveURL(/\/login$/);
+
+  const { access, refresh } = await sessionCookies(context);
+  expect(access, "access cookie").toBeUndefined();
+  expect(refresh, "refresh cookie").toBeUndefined();
+});
+
+test("signup rejects an email that is already registered", async ({ page, request, context }) => {
+  const email = uniqueEmail("duplicate");
+  await createAccount(request, email, "Original Owner");
+
+  await page.goto("/signup");
+  await page.getByLabel(/Full name/).fill("Second Owner");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "An account with this email already exists.",
+  );
+  await expect(page).toHaveURL(/\/signup$/);
+
+  const { access, refresh } = await sessionCookies(context);
+  expect(access, "access cookie").toBeUndefined();
+  expect(refresh, "refresh cookie").toBeUndefined();
+});
+
+test("a cross-origin auth POST is rejected before it reaches the API", async ({ request }) => {
+  const response = await request.post(`${BASE_URL}/api/auth/signup`, {
+    headers: { Origin: "https://attacker.example" },
+    data: { email: uniqueEmail("csrf"), password: PASSWORD },
+  });
+
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toMatchObject({ error: { code: "csrf_rejected" } });
+  expect(response.headers()["set-cookie"], "no session may be issued").toBeUndefined();
+});
+
 test("an expired access cookie is refreshed silently", async ({ page, request, context }) => {
   const email = uniqueEmail("refresh");
   await createAccount(request, email, "Katherine Johnson");

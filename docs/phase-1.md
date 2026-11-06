@@ -87,7 +87,7 @@ the job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
 | T4 | Cross-service integration suite (18 tests) passes against both the Compose stack and the SQLite process stack. | CI jobs `integration` and `sqlite`; locally `NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh` |
 | T5 | No test that is required by Phase 1 is skipped in its owning job. The Compose database-outage test skips only in the SQLite job, because it needs the Compose service, and runs in the container job with `NEXA_REQUIRE_COMPOSE_DB=1`. | CI summaries; integration health contracts |
 | T6 | Coverage is measured over all source files, not only imported ones, so a new untested module lowers the score. Current total: 100% statements, 98.87% branches, 100% functions, 100% lines. | `frontend/coverage/coverage-summary.json` |
-| T7 | Four Playwright/Chromium flows pass against a real stack: signup, login, dashboard rendering, silent refresh after the access cookie is invalidated, and logout that clears cookies and revokes the refresh token. | `cd frontend && npm run test:e2e`; CI job `sqlite` |
+| T7 | Seven Playwright/Chromium flows pass against a real stack: signup, login, dashboard rendering, wrong-password rejection, duplicate-email signup, cross-origin auth rejection, silent refresh after the access cookie is invalidated, and logout that clears cookies and revokes the refresh token. | `cd frontend && npm run test:e2e`; CI job `sqlite` |
 
 ### 2.6 CI, delivery and documentation
 
@@ -138,7 +138,7 @@ stack, so it is not a substitute for the CI `integration` job.
 | **CSRF origin checks** | **1** | No new infrastructure: the BFF already owns the cookies, so one guard module can reject cross-origin POSTs on all three state-changing routes. It is defence in depth on top of SameSite=Lax and directly verifiable with unit and integration tests. |
 | **Immediate access-token revocation** | **2** | Would require either a per-request revocation lookup (shared cache/DB) or token versioning with a migration and invalidation of every outstanding token on logout-everywhere. The Phase 1 bound is the 30-minute access-token lifetime; refresh and logout revocation are already immediate. Deferred so the session model is designed once, with the device/session UI. |
 | **Deployment automation** | **2** | There is no chosen target environment, account, secret store or rollback policy. Phase 1 delivers verified deployable artefacts (non-root images, health probes, startup ordering, cached builds). Automating a deploy before those operational decisions would bake in an environment prematurely. |
-| **E2E testing** | **Delivered** | Initially deferred: Phase 1 already verified the journeys at the HTTP boundary, and browser E2E adds Playwright, browser installation and flake surface. It was added immediately after acceptance because the SQLite job already runs both services: four Chromium flows now cover hydration, rendered UI, httpOnly cookies, silent rotation and logout, reusing that stack at the cost of one browser download. |
+| **E2E testing** | **Delivered** | Initially deferred: Phase 1 already verified the journeys at the HTTP boundary, and browser E2E adds Playwright, browser installation and flake surface. It was added immediately after acceptance because the SQLite job already runs both services: seven Chromium flows now cover hydration, rendered UI, httpOnly cookies, rejected credential and cross-origin requests, silent rotation and logout, reusing that stack at the cost of one browser download. |
 
 ### Phase 2 backlog (explicitly not Phase 1)
 
