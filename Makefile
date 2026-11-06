@@ -40,7 +40,7 @@ e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait,
 	@set -euo pipefail; \
 	frontend_origin="http://localhost:$${FRONTEND_PORT:-3000}"; \
 	backend_origin="http://localhost:$${BACKEND_PORT:-8000}"; \
-	trap 'docker compose down || true' EXIT; \
+	trap 'if [ "$${KEEP_STACK:-0}" = "1" ]; then echo "KEEP_STACK=1: leaving the stack up; run make down when done"; else docker compose down || true; fi' EXIT; \
 	echo "Starting the Compose stack (browser tests will target $${frontend_origin})"; \
 	docker compose up -d --build; \
 	./scripts/wait-for-http.sh "$${backend_origin}/api/v1/health" 180; \

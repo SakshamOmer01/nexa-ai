@@ -200,6 +200,10 @@ cd frontend && npx playwright install chromium && npm run test:e2e
 # runs Playwright, then runs `docker compose down` (the database volume is kept)
 make e2e-compose
 
+# KEEP_STACK=1 skips that teardown, so a failed flow can be inspected against the
+# stack it just failed on; run `make down` yourself when you are done
+KEEP_STACK=1 make e2e-compose
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt
