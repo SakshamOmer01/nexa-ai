@@ -309,12 +309,16 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
 
+      # The Ubuntu runner image ships Chrome/Chromium and their shared libraries. Installing only
+      # Playwright's browser avoids `apt-get update`, which can stall on a runner and did hang here.
       - name: Install Playwright Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: npx playwright install chromium
 
       - name: Browser E2E tests
         working-directory: frontend
+        timeout-minutes: 10
         env:
           # Canonical origin: the BFF compares Origin with Next's request origin, which is
           # localhost even when the server listens on 127.0.0.1.
