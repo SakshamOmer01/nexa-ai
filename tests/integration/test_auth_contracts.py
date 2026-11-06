@@ -7,6 +7,7 @@ that turns a token into an httpOnly session cookie.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 
@@ -15,6 +16,12 @@ PASSWORD = "integration-password-123"
 
 def unique_email(prefix: str = "integration") -> str:
     return f"{prefix}-{uuid.uuid4().hex}@example.com"
+
+
+def as_utc(value: str) -> datetime:
+    """Parse an API timestamp; SQLite returns it without an offset, PostgreSQL with ``+00:00``."""
+    parsed = datetime.fromisoformat(value)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def test_signup_login_and_protected_route(backend: httpx.Client) -> None:
@@ -155,6 +162,44 @@ def test_frontend_bff_creates_httponly_session(
     # Logout must revoke the server-side family, not only clear this browser's cookies.
     revoked = backend.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert revoked.status_code == 401
+
+
+def test_frontend_bff_signup_persists_orm_timestamps(frontend_url: str) -> None:
+    """The BFF signup must store the timestamps the ORM supplies, not rely on the database.
+
+    The SQLite stack migrates a real file, so ``users`` and ``refresh_tokens`` keep the migrations'
+    PostgreSQL ``now()`` server defaults that SQLite cannot evaluate. When ``TimestampMixin``
+    regressed to leaving the bookkeeping columns to the database, SQLite rejected the first insert
+    with "unknown function: now()" and this route answered 500 instead of 201.
+
+    Asserting the returned ``created_at`` is a recent time that login reads back unchanged keeps
+    the failure attributed to those columns, rather than to whatever step of the flow breaks first.
+    """
+    email = unique_email("timestamps")
+
+    with httpx.Client(base_url=frontend_url, timeout=10.0) as client:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": PASSWORD, "full_name": "Timestamp User"},
+        )
+        assert signup.status_code == 201, (
+            "BFF signup failed; on the SQLite stack this is the insert that rejects "
+            "created_at/updated_at when TimestampMixin stops supplying them: "
+            f"{signup.text}"
+        )
+
+        created_at = as_utc(signup.json()["user"]["created_at"])
+        assert abs((datetime.now(tz=UTC) - created_at).total_seconds()) < 300
+
+        # The cookie issued by signup renders the persisted profile through /auth/me.
+        dashboard = client.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert email in dashboard.text
+
+        # Login writes another refresh_tokens row, so it depends on the same ORM defaults.
+        login = client.post("/api/auth/login", json={"email": email, "password": PASSWORD})
+        assert login.status_code == 200, login.text
+        assert as_utc(login.json()["user"]["created_at"]) == created_at
 
 
 def test_proxy_refreshes_an_expired_access_cookie(frontend_url: str) -> None:

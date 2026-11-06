@@ -196,7 +196,11 @@ Integration tests target `NEXA_BACKEND_URL` / `NEXA_FRONTEND_URL` (defaults `loc
 `localhost:3000`) and wait up to `NEXA_STARTUP_TIMEOUT` seconds for readiness.
 `tests/integration/test_auth_contracts.py` covers the full loop against the running stack: API
 signup/login/refresh/logout, the BFF's httpOnly cookies, silent refresh in `proxy.ts` and the
-signed-out `/dashboard` redirect.
+signed-out `/dashboard` redirect. Its `test_frontend_bff_signup_persists_orm_timestamps` signs up
+through the BFF and asserts the persisted `created_at` is returned and survives a later login:
+because the SQLite stack keeps the migrations' PostgreSQL `now()` defaults, this answers `500`
+rather than `201` if `TimestampMixin` stops supplying the bookkeeping columns, so the SQLite job
+fails on the regression instead of only the backend suite catching it.
 
 `tests/integration/test_health_contracts.py` also proves readiness fails closed: it stops the
 compose `db` service, waits for `/api/v1/health` to answer `503` with `postgresql: down`, then
