@@ -225,17 +225,21 @@ paths are covered without Docker. The compose-only outage test skips there, and 
 keeps proving it.
 
 The same SQLite job then runs the Playwright suite in `frontend/e2e/` against those running services.
-It covers signup, login, dashboard rendering, wrong-password and duplicate-signup rejections,
-cross-origin auth rejection, silent refresh after the access cookie is invalidated, and logout
-(cookie clearing plus server-side refresh-token revocation). Playwright targets
+The container job runs that suite a second time, against the Compose stack's published ports, so the
+built images are exercised too: the standalone Next server, its baked-in public env and the
+containerised API with PostgreSQL behave differently enough from the process stack to be worth a
+second run. It covers signup, login, dashboard rendering, wrong-password and duplicate-signup
+rejections, cross-origin auth rejection, silent refresh after the access cookie is invalidated, and
+logout (cookie clearing plus server-side refresh-token revocation). Playwright targets
 `http://localhost:3000` by default because the BFF compares `Origin` with Next's canonical request
 origin; `E2E_BASE_URL` and `E2E_API_URL` override the defaults. Install Chromium once locally with
 `cd frontend && npx playwright install chromium`.
 
 CI runs every suite with a JUnit reporter and publishes each report as an artifact
 (`backend-test-results`, `ml-test-results`, `frontend-test-results`, `integration-test-results`,
-`sqlite-integration-test-results`, `e2e-report`), then renders any failed, errored or skipped cases
-into the job's run summary, so per-test outcomes are readable without access to job logs.
+`sqlite-integration-test-results`, `e2e-report`, `compose-e2e-report`), then renders any failed,
+errored or skipped cases into the job's run summary, so per-test outcomes are readable without
+access to job logs.
 
 Frontend tests are Vitest suites (`vitest.config.mts`, jsdom, Testing Library), running next to the
 code they cover:

@@ -354,9 +354,10 @@ jobs:
           done
 
   integration:
-    name: Containers — compose stack + integration tests
+    name: Containers — compose stack + integration and browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Browser flows add a browser download and a second Playwright run on top of the image builds.
+    timeout-minutes: 40
     needs: [backend, frontend, ml]
     steps:
       - uses: actions/checkout@v4
@@ -366,6 +367,32 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: tests/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The browser lives on the host and drives the published compose ports; the frontend image
+      # itself ships no test tooling. Installed before the image builds so a broken browser
+      # download fails fast instead of after the stack is up.
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      # The Ubuntu runner image ships Chrome/Chromium and their shared libraries. Installing only
+      # Playwright's browser avoids `apt-get update`, which can stall on a runner and did hang here.
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        timeout-minutes: 8
+        run: npx playwright install chromium
 
       # The default `docker` builder cannot import/export the GitHub Actions cache, so use a
       # buildx builder for both image builds.
@@ -434,6 +461,32 @@ jobs:
       - name: Summarize integration test results
         if: always()
         run: python scripts/junit-summary.py --title "Integration tests" integration-report.xml >> "$GITHUB_STEP_SUMMARY"
+
+      # The same browser flows the SQLite job runs, now against the images: the standalone Next
+      # server, its baked-in public env and the containerised API with the compose database are
+      # otherwise untested from a browser.
+      - name: Browser E2E tests (compose stack)
+        working-directory: frontend
+        timeout-minutes: 10
+        env:
+          # Published compose ports: the dashboard and BFF are on 3000, the API on 8000.
+          E2E_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:8000/api/v1
+        run: npm run test:e2e
+
+      - name: Upload browser test report (compose stack)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/e2e-results.xml
+          if-no-files-found: warn
+
+      - name: Summarize browser test results (compose stack)
+        if: always()
+        run: python scripts/junit-summary.py --title "Container browser E2E tests" frontend/e2e-results.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Container logs
         if: failure()

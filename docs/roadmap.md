@@ -19,10 +19,10 @@ of the codebase so features are added deliberately.
 | Credential rate limiting | Per-account (login/signup) and per-token-digest (refresh) fixed windows, `429` + `Retry-After`, configurable and disableable, in process memory | `backend/app/core/rate_limit.py`, `backend/app/api/deps.py` |
 | CSRF hardening | Every state-changing BFF route rejects a mismatched `Origin` and a non-same-origin `Sec-Fetch-Site` | `frontend/src/lib/auth/csrf.ts`, `frontend/src/lib/auth/bff.ts` |
 | Web session | Same-origin BFF with httpOnly cookies, silent refresh in the proxy, optimistic `/dashboard` guard | `frontend/src/lib/auth/`, `frontend/src/proxy.ts` |
-| Browser E2E | Playwright/Chromium drives signup, login, dashboard, silent refresh and logout against the real SQLite stack in CI | `frontend/e2e/`, `frontend/playwright.config.ts` |
+| Browser E2E | Playwright/Chromium drives signup, login, dashboard, silent refresh and logout against the real SQLite and Compose stacks in CI | `frontend/e2e/`, `frontend/playwright.config.ts` |
 | Database migrations | `0001` users, `0002` refresh_tokens, applied by the API container before serving and by CI against PostgreSQL 17 and SQLite | `backend/alembic/versions/` |
 | Containers | Multi-stage, non-root images with health checks and compose health-condition ordering | `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` |
-| CI | Five jobs: backend (PG + SQLite step), frontend (tests + coverage), ML, SQLite process stack + browser E2E, Compose stack; JUnit artifacts and run summaries | `.github/workflows/ci.yml` |
+| CI | Five jobs: backend (PG + SQLite step), frontend (tests + coverage), ML, SQLite process stack + browser E2E, Compose stack + browser E2E; JUnit artifacts and run summaries | `.github/workflows/ci.yml` |
 | Build caching | Dependency/source layer split, BuildKit cache mounts (pip, npm, Turbopack) and GitHub Actions layer cache scoped per image | Dockerfiles + `ci.yml` |
 | Documentation | README, architecture, development guide, Phase 1 acceptance criteria, three ADRs | `README.md`, `docs/` |
 
@@ -37,7 +37,7 @@ the current `main`:
 | Frontend (`npm test`) | 132 in 32 files | Every App Router page and route handler, all UI components, API client, env validation, cookie/session helpers, BFF credential and CSRF behaviour, and `proxy.ts` |
 | ML workspace | 5 | Pipeline contract and registry |
 | Cross-service integration | 18 | Running-stack API, BFF cookies, silent refresh, dashboard redirect, readiness degradation; run twice in CI (Compose and SQLite) |
-| Browser E2E (`npm run test:e2e`) | 7 | Real Chromium: signup, login, wrong password, duplicate signup, cross-origin auth rejection, silent refresh with an invalidated access cookie, logout + server-side revocation |
+| Browser E2E (`npm run test:e2e`) | 7 | Real Chromium: signup, login, wrong password, duplicate signup, cross-origin auth rejection, silent refresh with an invalidated access cookie, logout + server-side revocation; run twice in CI (Compose and SQLite) |
 | **Total** | **232** | — |
 
 Frontend coverage is measured over all of `src/**` and gated at 95% statements, branches, functions
