@@ -269,6 +269,7 @@ optimistically there and authoritatively by the API call behind it.
 make verify                                     # local gates that mirror CI
 cd frontend && npm test -- --coverage           # frontend suite + coverage floor
 cd frontend && npm run test:e2e                 # Playwright flows (running stack)
+make e2e-compose                                # Playwright flows against the Compose stack
 NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (running stack)
 ```
 

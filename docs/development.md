@@ -196,6 +196,10 @@ cd frontend && npm test -- --coverage
 # Browser E2E tests (requires a running stack and Chromium)
 cd frontend && npx playwright install chromium && npm run test:e2e
 
+# The same flows against the Compose stack: builds both images, waits for health,
+# runs Playwright, then runs `docker compose down` (the database volume is kept)
+make e2e-compose
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt

@@ -4,10 +4,10 @@
 SHELL := /bin/bash
 VENV := .venv
 
-.PHONY: help bootstrap install dev build lint test verify migrate up down logs ps clean
+.PHONY: help bootstrap install dev build lint test e2e e2e-compose verify migrate up down logs ps clean
 
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 bootstrap: ## Create env files, install frontend/backend/ML dependencies
@@ -35,6 +35,17 @@ test: ## Run backend and ML tests (frontend: cd frontend && npm test)
 
 e2e: ## Run Playwright browser tests (requires a running stack and Chromium)
 	cd frontend && npm run test:e2e
+
+e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait, test, tear down)
+	@set -euo pipefail; \
+	frontend_origin="http://localhost:$${FRONTEND_PORT:-3000}"; \
+	backend_origin="http://localhost:$${BACKEND_PORT:-8000}"; \
+	trap 'docker compose down || true' EXIT; \
+	echo "Starting the Compose stack (browser tests will target $${frontend_origin})"; \
+	docker compose up -d --build; \
+	./scripts/wait-for-http.sh "$${backend_origin}/api/v1/health" 180; \
+	./scripts/wait-for-http.sh "$${frontend_origin}/api/health" 180; \
+	( cd frontend && E2E_BASE_URL="$${frontend_origin}" E2E_API_URL="$${backend_origin}/api/v1" npm run test:e2e )
 
 verify: ## Run the local gates that mirror CI (integration: NEXA_VERIFY_INTEGRATION=1)
 	./scripts/verify.sh
