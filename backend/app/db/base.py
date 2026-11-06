@@ -7,7 +7,7 @@ predictable across environments.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, MetaData, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -33,15 +33,27 @@ class UUIDPrimaryKeyMixin:
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
 
 
+def utcnow() -> datetime:
+    """Application clock for bookkeeping columns."""
+    return datetime.now(tz=UTC)
+
+
 class TimestampMixin:
-    """Created/updated bookkeeping columns kept by the database clock."""
+    """Created/updated bookkeeping columns.
+
+    The application supplies the values instead of leaving them to the database, so every dialect
+    stores the same thing: SQLite has no ``now()`` function, and a table created by the migrations
+    therefore rejected inserts that relied on the PostgreSQL default. ``server_default`` is kept so
+    the DDL still matches the migrations and out-of-band SQL writes get a timestamp on PostgreSQL.
+    """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
         server_default=func.now(),
-        onupdate=func.now(),
         nullable=False,
     )

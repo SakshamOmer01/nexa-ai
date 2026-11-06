@@ -67,6 +67,12 @@ jobs:
       - name: Apply migrations to PostgreSQL
         run: alembic upgrade head
 
+      # The local-development path: the migrations must apply to SQLite too, and the API must be
+      # able to write to a schema they created. Its own step so a regression is attributed to the
+      # SQLite path instead of hiding inside the full suite, which also collects these tests.
+      - name: Migrations and auth flow on SQLite
+        run: pytest tests/test_sqlite_migrations.py
+
       - name: Import the application
         run: python -c "from app.main import app; print(app.title)"
 
