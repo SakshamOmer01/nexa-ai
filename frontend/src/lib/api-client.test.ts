@@ -103,6 +103,26 @@ describe("apiRequest", () => {
     });
   });
 
+  it("falls back to the status message when the body carries no error object", async () => {
+    stubFetch(jsonResponse({ message: "gateway is down" }, 502));
+
+    await expect(apiRequest("health")).rejects.toMatchObject({
+      status: 502,
+      code: "api_error",
+      message: "Request failed with status 502",
+    });
+  });
+
+  it("keeps the status message when the error object omits a detail", async () => {
+    stubFetch(jsonResponse({ error: { code: "rate_limited" } }, 429));
+
+    await expect(apiRequest("health")).rejects.toMatchObject({
+      status: 429,
+      code: "rate_limited",
+      message: "Request failed with status 429",
+    });
+  });
+
   it("falls back to a status message when the error body is not JSON", async () => {
     vi.stubGlobal(
       "fetch",

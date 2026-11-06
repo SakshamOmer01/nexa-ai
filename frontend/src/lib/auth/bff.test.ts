@@ -146,4 +146,21 @@ describe("handleCredentials", () => {
     expect(consoleError).toHaveBeenCalledWith("auth_upstream_unavailable", "fetch failed");
     expect(mockedSetSessionTokens).not.toHaveBeenCalled();
   });
+
+  it("describes a non-Error rejection as an unknown upstream failure", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockedApiRequest.mockRejectedValue("socket hang up");
+
+    const response = await handleCredentials(
+      "auth/login",
+      credentialRequest(
+        "http://localhost:3000/api/auth/login",
+        JSON.stringify({ email: "ada@example.com", password: "correct-horse" }),
+      ),
+    );
+
+    expect(response.status).toBe(503);
+    expect(consoleError).toHaveBeenCalledWith("auth_upstream_unavailable", "unknown error");
+    expect(mockedSetSessionTokens).not.toHaveBeenCalled();
+  });
 });

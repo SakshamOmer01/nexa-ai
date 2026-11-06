@@ -59,4 +59,16 @@ describe("POST /api/auth/logout", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
   });
+
+  it("describes a non-Error rejection as an unknown upstream failure", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Not every rejection is an Error (aborted fetches, thrown strings from a shim).
+    mockedApiRequestVoid.mockRejectedValue("socket hang up");
+
+    const response = await POST();
+
+    expect(warn).toHaveBeenCalledWith("auth_logout_upstream_failed", "unknown error");
+    expect(mockedClearSessionTokens).toHaveBeenCalledOnce();
+    expect(response.status).toBe(200);
+  });
 });

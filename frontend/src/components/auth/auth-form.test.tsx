@@ -61,6 +61,30 @@ describe("AuthForm", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("falls back to a generic message when the error body cannot be parsed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        // A proxy or CDN in front of the app can answer with HTML instead of the API envelope.
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON");
+        },
+      } as unknown as Response),
+    );
+
+    render(<AuthForm mode="login" />);
+    await userEvent.type(screen.getByLabelText("Email"), "ada@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "correct-horse");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something went wrong. Please try again.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("reports an unreachable server instead of failing silently", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 

@@ -124,8 +124,10 @@ jobs:
         run: npm run typecheck
 
       # `default` keeps the readable console log; `junit` feeds the artifact and the run summary.
-      - name: Tests
-        run: npm test -- --reporter=default --reporter=junit --outputFile=test-results.xml
+      # `--coverage` also applies the thresholds in vitest.config.mts, so a drop below them fails
+      # this step rather than only showing up in the report.
+      - name: Tests and coverage
+        run: npm test -- --coverage --reporter=default --reporter=junit --outputFile=test-results.xml
 
       - name: Upload test results
         if: always()
@@ -133,6 +135,14 @@ jobs:
         with:
           name: frontend-test-results
           path: frontend/test-results.xml
+          if-no-files-found: warn
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
           if-no-files-found: warn
 
       # setup-python is not otherwise needed here; it guarantees the `python` the summary script uses.
@@ -145,6 +155,11 @@ jobs:
         if: always()
         working-directory: ${{ github.workspace }}
         run: python scripts/junit-summary.py --title "Frontend tests" frontend/test-results.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize coverage
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: python scripts/coverage-summary.py --title "Frontend coverage" --threshold 95 frontend/coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Production build
         run: npm run build

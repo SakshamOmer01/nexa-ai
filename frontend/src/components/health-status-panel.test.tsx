@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -20,6 +20,16 @@ const HEALTHY: FrontendHealth = {
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body } as Response;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("HealthStatusPanel", () => {
@@ -60,6 +70,61 @@ describe("HealthStatusPanel", () => {
     // The dependency list is unknown, so only the web tier's own row is reported as down.
     expect(screen.getAllByText("down")).toHaveLength(1);
     expect(screen.getByText("Last check failed")).toBeInTheDocument();
+  });
+
+  it("falls back to the pending dot for a status it does not know", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...HEALTHY,
+          dependencies: [{ name: "vector-store", status: "degraded", latency_ms: null, detail: null }],
+        }),
+      ),
+    );
+
+    render(<HealthStatusPanel />);
+
+    const row = (await screen.findByText("vector-store")).closest("li") as HTMLElement;
+    // The server reports a state the palette has no colour for; it must still render a dot.
+    expect(within(row).getByText("degraded")).toBeInTheDocument();
+    expect(row.querySelector('[aria-hidden="true"]')).toHaveClass("bg-amber-400/70");
+  });
+
+  it("reports a generic failure when the probe rejects with a non-Error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue("boom"));
+
+    render(<HealthStatusPanel />);
+
+    expect(await screen.findByText("Health check failed")).toBeInTheDocument();
+    expect(screen.getByText("Last check failed")).toBeInTheDocument();
+  });
+
+  it("ignores a successful probe that lands after unmounting", async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(pending.promise));
+
+    const { unmount } = render(<HealthStatusPanel />);
+    unmount();
+    // Resolving now must not queue a state update on the unmounted tree.
+    await act(async () => {
+      pending.resolve(jsonResponse(HEALTHY));
+    });
+
+    expect(screen.queryByText("postgresql")).not.toBeInTheDocument();
+  });
+
+  it("ignores a failed probe that lands after unmounting", async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(pending.promise));
+
+    const { unmount } = render(<HealthStatusPanel />);
+    unmount();
+    await act(async () => {
+      pending.reject(new Error("late failure"));
+    });
+
+    expect(screen.queryByText("Last check failed")).not.toBeInTheDocument();
   });
 
   it("re-runs the probe when Refresh is clicked", async () => {
