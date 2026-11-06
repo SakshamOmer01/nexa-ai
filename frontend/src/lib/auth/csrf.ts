@@ -37,16 +37,47 @@ function matchesRequestOrigin(origin: string, expectedOrigin: string): boolean {
 }
 
 /**
+ * The origin the client actually addressed, or `null` when it cannot be determined.
+ *
+ * `request.url` follows the server's bind address, not the request: a standalone server started
+ * with `HOSTNAME=0.0.0.0` - what the container image does - reports `http://0.0.0.0:3000` for a
+ * request the browser made to `http://localhost:3000`, so comparing against it rejected every
+ * browser POST. `Host` carries the authority the client used; the scheme comes from the
+ * TLS-terminating proxy when one forwards the request, otherwise from the request URL itself.
+ */
+function requestOrigin(request: Request): string | null {
+  let url: URL;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return null;
+  }
+
+  const host = request.headers.get("host");
+  if (host === null || host === "") {
+    return url.origin;
+  }
+
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProtocol ? forwardedProtocol : url.protocol.slice(0, -1);
+
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Return a 403 response when the request did not originate from this site, otherwise `null`.
  *
- * `Origin` must match the request's own origin exactly, so a sibling subdomain is rejected too.
- * `Sec-Fetch-Site` must be `same-origin` or `none` (a user-initiated navigation) when present.
+ * `Origin` must match the origin the client addressed (its `Host`) exactly, so a sibling subdomain
+ * is rejected too. `Sec-Fetch-Site` must be `same-origin` or `none` (a user-initiated navigation)
+ * when present.
  */
 export function rejectCrossOrigin(request: Request): NextResponse | null {
-  let expectedOrigin: string;
-  try {
-    expectedOrigin = new URL(request.url).origin;
-  } catch {
+  const expectedOrigin = requestOrigin(request);
+  if (expectedOrigin === null) {
     return rejection();
   }
 

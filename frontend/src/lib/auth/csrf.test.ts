@@ -56,6 +56,49 @@ describe("rejectCrossOrigin", () => {
     expect(rejectCrossOrigin(request({ Origin: "http://localhost:4000" }))).not.toBeNull();
   });
 
+  // The container image runs `node server.js` with HOSTNAME=0.0.0.0, so Next reports the bind
+  // address in `request.url` while the browser sends the host it actually used. Comparing against
+  // the bind address rejected every browser POST in the Compose stack.
+  it("allows the client's origin when the request URL uses the bind address", () => {
+    const bound = new Request("http://0.0.0.0:3000/api/auth/signup", {
+      method: "POST",
+      headers: { Host: "localhost:3000", Origin: "http://localhost:3000" },
+    });
+
+    expect(rejectCrossOrigin(bound)).toBeNull();
+  });
+
+  it("still rejects an Origin that does not match the Host header", () => {
+    const bound = new Request("http://0.0.0.0:3000/api/auth/signup", {
+      method: "POST",
+      headers: { Host: "localhost:3000", Origin: "https://evil.example" },
+    });
+
+    expect(rejectCrossOrigin(bound)).not.toBeNull();
+  });
+
+  it("rejects a request whose Host header cannot be parsed", () => {
+    const invalid = new Request("http://0.0.0.0:3000/api/auth/signup", {
+      method: "POST",
+      headers: { Host: "bad host", Origin: "http://bad host" },
+    });
+
+    expect(rejectCrossOrigin(invalid)).not.toBeNull();
+  });
+
+  it("takes the scheme from a TLS-terminating proxy", () => {
+    const proxied = new Request("http://0.0.0.0:3000/api/auth/signup", {
+      method: "POST",
+      headers: {
+        Host: "app.example.com",
+        Origin: "https://app.example.com",
+        "X-Forwarded-Proto": "https, http",
+      },    });
+
+    expect(rejectCrossOrigin(proxied)).toBeNull();
+  });
+
+
   it("rejects a cross-site fetch even without an Origin header", () => {
     expect(rejectCrossOrigin(request({ "Sec-Fetch-Site": "cross-site" }))).not.toBeNull();
   });
