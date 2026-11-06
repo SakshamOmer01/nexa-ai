@@ -45,9 +45,17 @@ e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait,
 		echo "Frontend dependencies are missing; run: cd frontend && npm ci" >&2; \
 		exit 1; \
 	fi; \
-	if ! ( cd frontend && node -e "const { chromium } = require('@playwright/test'); process.exit(require('fs').existsSync(chromium.executablePath()) ? 0 : 1)" ); then \
-		echo "Playwright Chromium is not installed; run: cd frontend && npx playwright install chromium" >&2; \
-		exit 1; \
+	chromium_present() { ( cd frontend && node -e "const { chromium } = require('@playwright/test'); process.exit(require('fs').existsSync(chromium.executablePath()) ? 0 : 1)" ); }; \
+	if ! chromium_present; then \
+		if [ "$${INSTALL_BROWSER:-0}" = "1" ]; then \
+			echo "Playwright Chromium is missing; installing it (INSTALL_BROWSER=1)"; \
+			( cd frontend && npx playwright install chromium ); \
+			chromium_present || { echo "Chromium is still missing after the install" >&2; exit 1; }; \
+		else \
+			echo "Playwright Chromium is not installed; run: cd frontend && npx playwright install chromium" >&2; \
+			echo "Or set INSTALL_BROWSER=1 to install it as part of this target." >&2; \
+			exit 1; \
+		fi; \
 	fi; \
 	trap 'if [ "$${KEEP_STACK:-0}" = "1" ]; then echo "KEEP_STACK=1: leaving the stack up; run make down when done"; else docker compose down || true; fi' EXIT; \
 	echo "Starting the Compose stack (browser tests will target $${frontend_origin})"; \

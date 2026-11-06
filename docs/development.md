@@ -204,6 +204,10 @@ make e2e-compose
 # stack it just failed on; run `make down` yourself when you are done
 KEEP_STACK=1 make e2e-compose
 
+# INSTALL_BROWSER=1 downloads Playwright's Chromium if it is missing instead of
+# stopping with the install hint
+INSTALL_BROWSER=1 make e2e-compose
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt
