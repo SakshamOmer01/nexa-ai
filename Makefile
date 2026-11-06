@@ -38,6 +38,7 @@ e2e: ## Run Playwright browser tests (requires a running stack and Chromium)
 
 e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait, test, tear down)
 	@set -euo pipefail; \
+	status=0; \
 	frontend_origin="http://localhost:$${FRONTEND_PORT:-3000}"; \
 	backend_origin="http://localhost:$${BACKEND_PORT:-8000}"; \
 	trap 'if [ "$${KEEP_STACK:-0}" = "1" ]; then echo "KEEP_STACK=1: leaving the stack up; run make down when done"; else docker compose down || true; fi' EXIT; \
@@ -45,7 +46,13 @@ e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait,
 	docker compose up -d --build; \
 	./scripts/wait-for-http.sh "$${backend_origin}/api/v1/health" 180; \
 	./scripts/wait-for-http.sh "$${frontend_origin}/api/health" 180; \
-	( cd frontend && E2E_BASE_URL="$${frontend_origin}" E2E_API_URL="$${backend_origin}/api/v1" npm run test:e2e )
+	( cd frontend && E2E_BASE_URL="$${frontend_origin}" E2E_API_URL="$${backend_origin}/api/v1" npm run test:e2e ) || status=$$?; \
+	if [ "$$status" -ne 0 ]; then \
+		echo "Browser flows failed; inspect the run:"; \
+		echo "  report: frontend/playwright-report/index.html"; \
+		echo "  traces, screenshots and videos: frontend/test-results/e2e"; \
+	fi; \
+	exit "$$status"
 
 verify: ## Run the local gates that mirror CI (integration: NEXA_VERIFY_INTEGRATION=1)
 	./scripts/verify.sh
