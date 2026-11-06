@@ -33,6 +33,9 @@ test: ## Run backend and ML tests (frontend: cd frontend && npm test)
 	cd backend && ../$(VENV)/bin/python -m pytest
 	cd ml && ../$(VENV)/bin/python -m pytest
 
+e2e: ## Run Playwright browser tests (requires a running stack and Chromium)
+	cd frontend && npm run test:e2e
+
 verify: ## Run the local gates that mirror CI (integration: NEXA_VERIFY_INTEGRATION=1)
 	./scripts/verify.sh
 

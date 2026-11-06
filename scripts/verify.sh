@@ -81,12 +81,15 @@ CI additionally runs, which this script does not start:
   • "backend"     — applies Alembic migrations to a real PostgreSQL 17 service
   • "integration" — builds both images, starts the Compose stack, runs the integration suite,
                     including the database-outage test
-  • "sqlite"      — starts both services as processes and runs the integration suite
-  • JUnit/coverage artifacts and job summaries
+  • "sqlite"      — starts both services as processes, runs the integration suite and the
+                    Playwright browser flows
+  • JUnit/coverage/Playwright artifacts and job summaries
 
 This script generates PostgreSQL DDL but cannot apply it without a database server, and it does
-not build images or start services (the optional integration step expects a stack you started).
+not build images, install a browser or start services (the optional integration step expects a
+stack you started).
 
-To check the cross-service suite locally, start ./scripts/dev.sh, then run:
+To check the cross-service and browser suites locally, start ./scripts/dev.sh, then run:
   NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh
+  cd frontend && npx playwright install chromium && npm run test:e2e
 EOF

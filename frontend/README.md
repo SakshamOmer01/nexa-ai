@@ -19,6 +19,7 @@ Next.js 16 (App Router, React Server Components) application layer. See the root
 | `src/lib/auth/` | Same-origin BFF, cookie definitions and server session helpers |
 | `src/proxy.ts` | Rotates a stale access cookie and guards `/dashboard` |
 | `src/types/api.ts` | Wire contracts mirrored from the backend schemas |
+| `e2e/` | Playwright browser flows against the running stack |
 
 ## Local development
 
@@ -48,11 +49,21 @@ npm run lint
 npm run typecheck        # next typegen && tsc --noEmit
 npm test -- --coverage   # Vitest + Testing Library, 95% coverage floor
 npm run build            # production standalone build
+
+# Browser E2E: start the stack first (./scripts/dev.sh or docker compose up -d)
+npx playwright install chromium
+npm run test:e2e
 ```
 
 Tests sit next to the code they cover (`src/**/*.test.ts(x)`) and run in jsdom with `fetch`,
 `next/navigation` and env values stubbed per file. State-changing BFF routes also reject
 cross-origin requests (`src/lib/auth/csrf.ts`).
+
+`e2e/auth.spec.ts` adds four real-browser flows: signup, login, silent refresh after the access
+cookie is invalidated, and logout (cookie clearing plus refresh-token revocation). They use
+Chromium against `http://localhost:3000` by default; set `E2E_BASE_URL` and `E2E_API_URL` for a
+different stack. The CI `sqlite` job installs Chromium and runs the same command after its
+integration tests, reusing the services it already started.
 
 > `output: "standalone"` is enabled for Docker. For a local production preview use the standalone
 > server (`node .next/standalone/server.js`) or accept the warning from `next start`.

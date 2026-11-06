@@ -193,6 +193,9 @@ cd frontend && npm test
 # Frontend tests with the 95% coverage gate
 cd frontend && npm test -- --coverage
 
+# Browser E2E tests (requires a running stack and Chromium)
+cd frontend && npx playwright install chromium && npm run test:e2e
+
 # Cross-service integration tests (requires a running stack)
 ./scripts/dev.sh                     # or: docker compose up -d
 python -m pip install -r tests/requirements.txt
@@ -216,15 +219,22 @@ is not managed by Docker Compose (for example a bare PostgreSQL on `localhost:54
 test has no way to stop and restart that database. Set `NEXA_REQUIRE_COMPOSE_DB=1` to turn that
 skip into a failure; CI sets it so a green pipeline proves the outage path actually ran.
 
-CI also runs this suite against a SQLite-backed stack (`SQLite stack — services + integration
+CI also runs this suite against a SQLite-backed stack (`SQLite stack — integration and browser
 tests`): the migrations, both services started as processes and the same tests, so the BFF and proxy
 paths are covered without Docker. The compose-only outage test skips there, and the container job
 keeps proving it.
 
+The same SQLite job then runs the Playwright suite in `frontend/e2e/` against those running services.
+It covers signup, login, dashboard rendering, silent refresh after the access cookie is invalidated,
+and logout (cookie clearing plus server-side refresh-token revocation). Playwright targets
+`http://localhost:3000` by default because the BFF compares `Origin` with Next's canonical request
+origin; `E2E_BASE_URL` and `E2E_API_URL` override the defaults. Install Chromium once locally with
+`cd frontend && npx playwright install chromium`.
+
 CI runs every suite with a JUnit reporter and publishes each report as an artifact
 (`backend-test-results`, `ml-test-results`, `frontend-test-results`, `integration-test-results`,
-`sqlite-integration-test-results`), then renders any failed, errored or skipped cases into the
-job's run summary, so per-test outcomes are readable without access to job logs.
+`sqlite-integration-test-results`, `e2e-report`), then renders any failed, errored or skipped cases
+into the job's run summary, so per-test outcomes are readable without access to job logs.
 
 Frontend tests are Vitest suites (`vitest.config.mts`, jsdom, Testing Library), running next to the
 code they cover:
@@ -266,7 +276,8 @@ NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh
 The script runs: ruff lint/format and the full backend suite; the dedicated SQLite migrations/auth
 step; PostgreSQL DDL generation (`alembic upgrade head --sql`); ML lint/format/tests; ESLint;
 TypeScript; frontend tests with the coverage thresholds from `vitest.config.mts`; the production
-build; and `docker compose config` when Docker is installed.
+build; and `docker compose config` when Docker is installed. Browser E2E is not part of the script:
+run `cd frontend && npm run test:e2e` against a running stack.
 
 It does **not** reproduce everything CI does. CI also applies the migrations to a live PostgreSQL 17
 service, builds both images with a buildx layer cache, starts the Compose stack and runs the
@@ -291,6 +302,10 @@ the PostgreSQL migration apply and image builds remain CI-only.
 - The browser renderer cannot await async server components, so `AuthNav` tests call it and render
   the resolved tree, while tests for panels that embed it (`SiteHeader`, `AuthShell`) replace it
   with a stub.
+- Playwright lives in `frontend/e2e/` and is configured by `playwright.config.ts`. It drives a real
+  Chromium against a running stack, one worker at a time, and writes `playwright-report/` plus
+  `e2e-results.xml` (both git-ignored). The config uses `localhost`, matching the documented URL and
+  Next's canonical request origin.
 
 ## 8. Troubleshooting
 

@@ -212,12 +212,13 @@ jobs:
 
   # The local-development stack from docs/development.md: SQLite instead of the compose database,
   # both services started as processes. It runs the same cross-service suite as the container job,
-  # so the BFF and proxy paths are exercised without Docker, and it runs in parallel rather than
-  # extending the backend job, which has no Node toolchain and should stay fast.
+  # then reuses those services for Playwright, so the BFF, proxy and rendered-UI paths are exercised
+  # without Docker. It runs in parallel rather than extending the backend job, which has no Node
+  # toolchain and should stay fast.
   sqlite:
-    name: SQLite stack — services + integration tests
+    name: SQLite stack — integration and browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
@@ -299,6 +300,41 @@ jobs:
       - name: Summarize integration test results
         if: always()
         run: python scripts/junit-summary.py --title "SQLite stack integration tests" integration-report.xml >> "$GITHUB_STEP_SUMMARY"
+
+      # Reuse the running services for browser flows. The browser is only downloaded once per
+      # lockfile because @playwright/test is a dev dependency of the frontend workspace.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser E2E tests
+        working-directory: frontend
+        env:
+          # Canonical origin: the BFF compares Origin with Next's request origin, which is
+          # localhost even when the server listens on 127.0.0.1.
+          E2E_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:8000/api/v1
+        run: npm run test:e2e
+
+      - name: Upload browser test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/e2e-results.xml
+          if-no-files-found: warn
+
+      - name: Summarize browser test results
+        if: always()
+        run: python scripts/junit-summary.py --title "Browser E2E tests" frontend/e2e-results.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Service logs
         if: failure()

@@ -19,9 +19,10 @@ of the codebase so features are added deliberately.
 | Credential rate limiting | Per-account (login/signup) and per-token-digest (refresh) fixed windows, `429` + `Retry-After`, configurable and disableable, in process memory | `backend/app/core/rate_limit.py`, `backend/app/api/deps.py` |
 | CSRF hardening | Every state-changing BFF route rejects a mismatched `Origin` and a non-same-origin `Sec-Fetch-Site` | `frontend/src/lib/auth/csrf.ts`, `frontend/src/lib/auth/bff.ts` |
 | Web session | Same-origin BFF with httpOnly cookies, silent refresh in the proxy, optimistic `/dashboard` guard | `frontend/src/lib/auth/`, `frontend/src/proxy.ts` |
+| Browser E2E | Playwright/Chromium drives signup, login, dashboard, silent refresh and logout against the real SQLite stack in CI | `frontend/e2e/`, `frontend/playwright.config.ts` |
 | Database migrations | `0001` users, `0002` refresh_tokens, applied by the API container before serving and by CI against PostgreSQL 17 and SQLite | `backend/alembic/versions/` |
 | Containers | Multi-stage, non-root images with health checks and compose health-condition ordering | `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` |
-| CI | Five jobs: backend (PG + SQLite step), frontend (tests + coverage), ML, SQLite process stack, Compose stack; JUnit artifacts and run summaries | `.github/workflows/ci.yml` |
+| CI | Five jobs: backend (PG + SQLite step), frontend (tests + coverage), ML, SQLite process stack + browser E2E, Compose stack; JUnit artifacts and run summaries | `.github/workflows/ci.yml` |
 | Build caching | Dependency/source layer split, BuildKit cache mounts (pip, npm, Turbopack) and GitHub Actions layer cache scoped per image | Dockerfiles + `ci.yml` |
 | Documentation | README, architecture, development guide, Phase 1 acceptance criteria, three ADRs | `README.md`, `docs/` |
 
@@ -36,7 +37,8 @@ the current `main`:
 | Frontend (`npm test`) | 132 in 32 files | Every App Router page and route handler, all UI components, API client, env validation, cookie/session helpers, BFF credential and CSRF behaviour, and `proxy.ts` |
 | ML workspace | 5 | Pipeline contract and registry |
 | Cross-service integration | 18 | Running-stack API, BFF cookies, silent refresh, dashboard redirect, readiness degradation; run twice in CI (Compose and SQLite) |
-| **Total** | **225** | — |
+| Browser E2E (`npm run test:e2e`) | 4 | Real Chromium: signup, login, dashboard, silent refresh with an invalidated access cookie, logout + server-side revocation |
+| **Total** | **229** | — |
 
 Frontend coverage is measured over all of `src/**` and gated at 95% statements, branches, functions
 and lines. Current totals: **100% statements, 98.87% branches, 100% functions, 100% lines**. The
@@ -46,14 +48,14 @@ This replaces the earlier claim that the frontend had no component tests: it now
 covering every route and component. The frontend tests live next to the code they cover
 (`src/**/*.test.ts(x)`), not in a separate `__tests__` tree.
 
-### Remaining E2E gap
+### Browser coverage
 
-There is still **no browser end-to-end suite** (Playwright or equivalent). The user journeys are
-covered at the HTTP boundary — signup, login, refresh, logout, httpOnly BFF cookies, proxy rotation
-and the signed-out `/dashboard` redirect all run against real services in two CI jobs — but no test
-drives a real browser through the rendered UI, JavaScript hydration, cookie behaviour or client-side
-navigation. This is a Phase 2 item (see below), not a Phase 1 deliverable; the decision is recorded
-in [docs/phase-1.md](phase-1.md#phase-2-backlog-explicitly-not-phase-1).
+The browser gap is closed: `frontend/e2e/auth.spec.ts` drives Chromium through the rendered UI and
+JavaScript hydration. It asserts httpOnly cookies after signup, account login, silent rotation when
+the access cookie is stale, and logout that both clears cookies and makes the old refresh token
+unusable. The SQLite CI job reuses its running services, downloads Chromium once per lockfile and
+runs this suite after the cross-service tests. The suite uses `localhost` because the BFF compares
+`Origin` with Next's canonical request origin.
 
 ## Phase 2 — pending
 
@@ -87,12 +89,7 @@ CI builds and verifies the images, but no workflow publishes or deploys them. Ph
 verified deployable artefacts because no target environment, secret store, migration-runner policy or
 rollback process has been chosen. Deployment automation is Phase 2.
 
-### 4. Browser end-to-end tests
-
-A Playwright suite for signup → login → dashboard → logout, silent refresh and the signed-out
-redirect is the remaining verification gap (see above).
-
-### 5. Authentication features
+### 4. Authentication features
 
 - **Email verification** — accounts are usable immediately; there is no `email_verified` column or
   verification flow.
@@ -100,7 +97,7 @@ redirect is the remaining verification gap (see above).
 - **Refresh-token cleanup** — expired and revoked rows are retained for audit; no scheduled job
   prunes them.
 
-### 6. Per-device session management
+### 5. Per-device session management
 
 Implemented today: **one refresh-token family per login**. Each successful login (or signup) creates a
 new `family_id`, and logout/replay revocation affects only that family, so two browsers are already
@@ -120,7 +117,7 @@ Building this needs migration `0003` (device/last-seen columns), two endpoints s
 `user_id = current_user.id`, and a dashboard panel. Until then, the family id plus timestamps are the
 only server-side session identity.
 
-### 7. Platform features
+### 6. Platform features
 
 - Multi-tenant workspaces, memberships and role checks (no models, no endpoints).
 - API keys for machine-to-machine access.
@@ -142,11 +139,10 @@ only server-side session identity.
 ## Suggested Phase 2 order
 
 1. Distributed rate limiting (shared store + trusted client identity).
-2. Browser E2E suite for the existing five routes.
-3. Immediate access-token revocation and "sign out everywhere".
-4. Device metadata + session endpoints and dashboard panel.
-5. Email verification and password reset (needs an email provider).
-6. Deployment automation once the target and rollback process are chosen.
-7. Multi-tenant workspaces and API keys.
-8. OpenTelemetry traces/metrics and readiness alerting.
-9. Model registry, evaluation gates, inference worker and refresh-token cleanup.
+2. Immediate access-token revocation and "sign out everywhere".
+3. Device metadata + session endpoints and dashboard panel.
+4. Email verification and password reset (needs an email provider).
+5. Deployment automation once the target and rollback process are chosen.
+6. Multi-tenant workspaces and API keys.
+7. OpenTelemetry traces/metrics and readiness alerting.
+8. Model registry, evaluation gates, inference worker and refresh-token cleanup.

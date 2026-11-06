@@ -268,6 +268,7 @@ optimistically there and authoritatively by the API call behind it.
 ```bash
 make verify                                     # local gates that mirror CI
 cd frontend && npm test -- --coverage           # frontend suite + coverage floor
+cd frontend && npm run test:e2e                 # Playwright flows (running stack)
 NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (running stack)
 ```
 
@@ -282,6 +283,7 @@ NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (r
 | Frontend types | `cd frontend && npm run typecheck` | `next typegen` + `tsc --noEmit` |
 | Frontend tests & coverage | `cd frontend && npm test -- --coverage` | 132 Vitest/Testing Library tests in 32 files; 95% statements/branches/functions/lines floor |
 | Frontend build | `cd frontend && npm run build` | production standalone build |
+| Browser E2E | `cd frontend && npm run test:e2e` | 4 Playwright/Chromium flows: signup, login, silent refresh, logout + revocation; requires a running stack |
 | Integration | `pytest tests` | 18 cross-service tests; requires a running stack |
 | PostgreSQL migrations | CI job `backend` | applies Alembic to a real PostgreSQL 17 service |
 | Containers | CI job `integration` | `docker compose config` + cached buildx builds |
@@ -289,15 +291,16 @@ NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh   # add the cross-service suite (r
 `make verify` and `scripts/verify.sh` run the backend lint/tests, the dedicated SQLite migration
 step, PostgreSQL DDL generation, ML lint/tests, frontend lint/typecheck/tests-with-coverage and the
 production build, plus `docker compose config` when Docker is installed. They do **not** apply
-migrations to a live PostgreSQL server, build container images or start a staged stack; those are
-the CI jobs `backend` and `integration`. A green `make verify` is therefore necessary but not
-sufficient for a green pipeline — start the stack and run
-`NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh` to cover the cross-service suite locally.
+migrations to a live PostgreSQL server, build container images, start a staged stack or download a
+browser; those are the CI jobs `backend`, `sqlite` and `integration`. A green `make verify` is
+therefore necessary but not sufficient for a green pipeline — start the stack and run
+`NEXA_VERIFY_INTEGRATION=1 ./scripts/verify.sh` for the cross-service suite, then
+`cd frontend && npm run test:e2e` for the browser flows.
 
 Frontend coverage is measured over every file in `src/**` (not only imported modules) and enforced
 by `vitest.config.mts`. The current totals are 100% statements, 98.87% branches, 100% functions and
 100% lines, so a new untested module lowers the score. Test locations: `backend/tests/`,
-`frontend/src/**/*.test.ts(x)`, `ml/tests/` and `tests/integration/`.
+`frontend/src/**/*.test.ts(x)`, `frontend/e2e/`, `ml/tests/` and `tests/integration/`.
 
 See [docs/phase-1.md](docs/phase-1.md) for the Phase 1 acceptance criteria and the reasoning behind
 the deferred features.
@@ -337,11 +340,11 @@ Desktop) so a rebuild only redoes the layers that changed:
 | `backend` | ruff, migrations applied to a real PostgreSQL 17 service, the SQLite migration/auth step, app import, pytest |
 | `frontend` | npm ci, ESLint, typecheck, tests with the coverage gate, production build (with a restored `.next` build cache) |
 | `ml` | ruff, pytest |
-| `sqlite` | production build, backend + frontend started as processes on a SQLite file, health gates, the same 18 cross-service tests |
+| `sqlite` | production build, backend + frontend started as processes on a SQLite file, health gates, the same 18 cross-service tests, then the 4 Playwright browser flows |
 | `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests including the database-outage path |
 
-Every suite publishes a JUnit report and a run summary, and the frontend job uploads the coverage
-report. The container job is the one that used to rebuild from scratch on every run. It now builds both
+Every suite publishes a JUnit report and a run summary, the frontend job uploads the coverage
+report, and the SQLite job uploads the Playwright HTML report and traces on failure. The container job is the one that used to rebuild from scratch on every run. It now builds both
 images with `docker/build-push-action` on a `docker/setup-buildx-action` builder and exports the
 layers to the GitHub Actions cache (`type=gha`, `mode=max`, one scope per image). A run that only
 touches application code reuses the dependency layers, so the stack starts from warm images; the
@@ -383,6 +386,8 @@ Delivered:
   logout — sessions survive access-token expiry without long-lived JWTs. Each login has its own
   family, so signing out of one browser does not touch another; the family is the session boundary.
 - Credential-endpoint rate limiting (per account/token) and explicit CSRF origin checks on the BFF.
+- Browser end-to-end coverage with Playwright/Chromium for signup, login, silent refresh and logout,
+  run against the SQLite stack in CI.
 - Cache-friendly images and a cached container pipeline: dependency/source layer split, BuildKit
   cache mounts and a GitHub Actions layer cache shared by both images.
 
@@ -393,7 +398,7 @@ status and Phase 2 decisions):
 - Email verification and password reset
 - Device metadata for sessions plus a session list/revoke UI (families exist, device labels do not)
 - Immediate access-token revocation and "sign out everywhere"
-- Browser end-to-end tests (Playwright) and deployment automation
+- Deployment automation
 - Multi-tenant workspaces and API keys
 - Contract generation (OpenAPI → typed client) once the API surface grows
 - Model registry, evaluation gates and an inference worker using `ml/`
