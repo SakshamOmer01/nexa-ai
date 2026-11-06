@@ -345,14 +345,14 @@ Desktop) so a rebuild only redoes the layers that changed:
 | `integration` | `docker compose config`, cached buildx image builds, stack startup with `--no-build`, health gates, cross-service tests including the database-outage path, then the same 7 Playwright browser flows against the container images |
 
 Every suite publishes a JUnit report and a run summary, the frontend job uploads the coverage
-report, and both the SQLite and container jobs upload the Playwright HTML report and traces on
-failure. The container job is the one that used to rebuild from scratch on every run. It now builds
-both images with `docker/build-push-action` on a `docker/setup-buildx-action` builder and exports
-the layers to the GitHub Actions cache (`type=gha`, `mode=max`, one scope per image). A run that
-only touches application code reuses the dependency layers, so the stack starts from warm images;
-the compose stack is then started with `--no-build` so nothing is compiled twice. Caches are scoped
-per branch and are subject to GitHub's 10 GB repository limit; the two scopes are independent, so a
-rejected frontend layer never invalidates the backend's.
+report, and both the SQLite and container jobs upload the Playwright HTML report, with traces for
+any flow that fails. The container job is the one that used to rebuild from scratch on every run. It
+now builds both images with `docker/build-push-action` on a `docker/setup-buildx-action` builder and
+exports the layers to the GitHub Actions cache (`type=gha`, `mode=max`, one scope per image). A run
+that only touches application code reuses the dependency layers, so the stack starts from warm
+images; the compose stack is then started with `--no-build` so nothing is compiled twice. Caches are
+scoped per branch and are subject to GitHub's 10 GB repository limit; the two scopes are
+independent, so a rejected frontend layer never invalidates the backend's.
 
 Deployment is intentionally not wired to an environment yet; the images and probes are ready for any
 orchestrator. Choosing the target, secret store and rollback process is Phase 2 work (see

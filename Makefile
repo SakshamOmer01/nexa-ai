@@ -41,8 +41,12 @@ e2e-compose: ## Run the Playwright suite against the Compose stack (build, wait,
 	status=0; \
 	frontend_origin="http://localhost:$${FRONTEND_PORT:-3000}"; \
 	backend_origin="http://localhost:$${BACKEND_PORT:-8000}"; \
-	if [ ! -d frontend/node_modules ]; then \
-		echo "Frontend dependencies are missing; run: cd frontend && npm ci" >&2; \
+	if ! command -v node >/dev/null 2>&1; then \
+		echo "Node.js is required for the browser suite; install Node 22 or newer" >&2; \
+		exit 1; \
+	fi; \
+	if ! ( cd frontend && node -e "require.resolve('@playwright/test')" >/dev/null 2>&1 ); then \
+		echo "Frontend dependencies are missing or incomplete; run: cd frontend && npm ci" >&2; \
 		exit 1; \
 	fi; \
 	chromium_present() { ( cd frontend && node -e "const { chromium } = require('@playwright/test'); process.exit(require('fs').existsSync(chromium.executablePath()) ? 0 : 1)" ); }; \
