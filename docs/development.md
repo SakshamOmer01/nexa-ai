@@ -174,11 +174,22 @@ CI runs every suite with a JUnit reporter and publishes each report as an artifa
 then renders any failed, errored or skipped cases into the job's run summary, so per-test outcomes
 are readable without access to job logs.
 
-Frontend tests are Vitest component tests (`vitest.config.mts`, jsdom, Testing Library): `Button`
-(variants, sizes, `asChild`, disabled clicks), `AuthForm` (login/signup payloads, API error detail,
-unreachable server) and `HealthStatusPanel` (loading state, healthy rows, unhealthy response,
-refresh). `npm test` runs them; CI adds `--reporter=junit --outputFile=test-results.xml` so the
-report can be published.
+Frontend tests are Vitest suites (`vitest.config.mts`, jsdom, Testing Library), running next to the
+code they cover:
+
+- Components — `Button` (variants, sizes, `asChild`, disabled clicks), `AuthForm` (login/signup
+  payloads, API error detail, unreachable server), `AuthNav` (signed-in vs signed-out chrome),
+  `SignOutButton` (logout request, pending state, redirect), `AuthShell` (page frame and slots),
+  `SiteHeader` (brand, nav, auth slot, external links), `SiteFooter` (links and version) and
+  `HealthStatusPanel` (loading state, healthy rows, unhealthy response, refresh).
+- Library helpers — `api-client` (URL resolution and slash handling, `no-store`, header merging,
+  typed `ApiClientError`, void requests, health fallback), `env` (trimming, `apiOrigin`, fail-fast
+  validation), `auth/cookies` (cookie hardening, `Secure` over https, JWT expiry skew),
+  `auth/session` (token cookies, `/auth/me` lookup, graceful signed-out fallback), `auth/bff`
+  (status codes, token storage, backend error mapping) and `cn` (class merging).
+
+`npm test` runs them; CI adds `--reporter=junit --outputFile=test-results.xml` so the report can be
+published.
 
 ## 6. Verify before pushing
 
@@ -197,8 +208,11 @@ generation, ESLint, TypeScript, frontend tests, the production build and `docker
   it; the container runs `node server.js` from the standalone bundle.
 - Tailwind v4 has no `tailwind.config.js`: tokens live in `src/app/globals.css`.
 - `vitest.config.mts` repeats the `@/*` alias from `tsconfig.json` and loads `vitest.setup.ts`, which
-  registers the jest-dom matchers and unmounts trees between tests. Tests stub `fetch` and
-  `next/navigation` per file, so no component needs a running backend.
+  registers the jest-dom matchers and unmounts trees between tests. Tests stub `fetch`,
+  `next/navigation` and env vars per file, so no component needs a running backend.
+- The browser renderer cannot await async server components, so `AuthNav` tests call it and render
+  the resolved tree, while tests for panels that embed it (`SiteHeader`, `AuthShell`) replace it
+  with a stub.
 
 ## 8. Troubleshooting
 

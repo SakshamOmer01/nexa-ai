@@ -13,8 +13,9 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
-    // next/navigation and fetch are mocked per test; leave no stub behind for the next file.
+    // next/navigation, fetch and env vars are mocked per test; leave no stub behind.
     unstubGlobals: true,
+    unstubEnvs: true,
     restoreMocks: true,
   },
 });
