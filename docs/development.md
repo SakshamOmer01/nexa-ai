@@ -197,7 +197,8 @@ cd frontend && npm test -- --coverage
 cd frontend && npx playwright install chromium && npm run test:e2e
 
 # The same flows against the Compose stack: builds both images, waits for health,
-# runs Playwright, then runs `docker compose down` (the database volume is kept)
+# runs Playwright, then runs `docker compose down` (the database volume is kept).
+# It refuses to start if a stack is already running - run `make down` first.
 make e2e-compose
 
 # KEEP_STACK=1 skips that teardown, so a failed flow can be inspected against the
