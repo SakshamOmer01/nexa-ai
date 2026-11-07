@@ -1,44 +1,40 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { Hero } from "@/components/sections/hero";
 import { siteConfig } from "@/config/site";
 
-// The hero embeds the live probe panel, which fetches on mount; it has its own suite.
-vi.mock("@/components/health-status-panel", () => ({
-  HealthStatusPanel: () => <div data-testid="health-panel">probe panel</div>,
-}));
-
 describe("Hero", () => {
-  it("leads with the positioning statement and the shared site description", () => {
+  it("leads with the product positioning and shared site description", () => {
     render(<Hero />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "built for production",
+      "everything you ask AI",
     );
     expect(screen.getByText(siteConfig.description)).toBeInTheDocument();
-    expect(screen.getByText(`v${siteConfig.version}`)).toBeInTheDocument();
+    expect(screen.getByText(/Documents, analytics and coding mode/)).toBeInTheDocument();
   });
 
-  it("points the calls to action at the API docs and the repository", () => {
+  it("points the calls to action at signup, chat and the repository", () => {
     render(<Hero />);
 
-    const api = screen.getByRole("link", { name: /Explore the API/ });
-    expect(api).toHaveAttribute("href", siteConfig.apiDocsUrl);
-    expect(api).toHaveAttribute("target", "_blank");
-    expect(api).toHaveAttribute("rel", "noreferrer");
+    expect(screen.getByRole("link", { name: /Start for free/ })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: "Open the assistant" })).toHaveAttribute(
+      "href",
+      "/chat",
+    );
 
-    const repo = screen.getByRole("link", { name: "Repository" });
+    const repo = screen.getByRole("link", { name: /View source/ });
     expect(repo).toHaveAttribute("href", siteConfig.githubUrl);
+    expect(repo).toHaveAttribute("target", "_blank");
+    expect(repo).toHaveAttribute("rel", "noreferrer");
   });
 
-  it("lists the stack highlights next to the probe panel", () => {
+  it("shows the illustration and its honest caption", () => {
     render(<Hero />);
 
-    for (const highlight of ["Next.js 16", "FastAPI", "PostgreSQL 17", "Docker + CI"]) {
-      expect(screen.getByText(highlight)).toBeInTheDocument();
-    }
-    expect(screen.getByTestId("health-panel")).toBeInTheDocument();
-    expect(screen.getByText(/Readiness fails with HTTP/)).toBeInTheDocument();
+    expect(screen.getByText(/An illustration of the Nexa workspace/)).toBeInTheDocument();
+    expect(screen.getByText("Local-first history")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Nexa AI" })).toBeInTheDocument();
   });
 });

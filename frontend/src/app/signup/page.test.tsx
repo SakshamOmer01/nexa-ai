@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import SignupPage, { metadata } from "@/app/signup/page";
@@ -23,7 +23,10 @@ describe("SignupPage", () => {
   it("links existing users back to the sign-in page", () => {
     render(<SignupPage />);
 
-    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
   });
 
   it("publishes page metadata for the sign-up route", () => {

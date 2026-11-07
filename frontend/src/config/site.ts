@@ -4,18 +4,35 @@ export const siteConfig = {
   name: env.NEXT_PUBLIC_APP_NAME,
   version: env.NEXT_PUBLIC_APP_VERSION,
   url: env.NEXT_PUBLIC_SITE_URL,
-  tagline: "The foundation for production AI products",
+  tagline: "Your calmer AI workspace",
   description:
-    "Nexa AI is a modular monorepo for shipping AI products: a Next.js application layer, a typed FastAPI backend, PostgreSQL persistence, an ML workspace, and CI/CD that verifies every layer.",
+    "Nexa AI brings chat, your documents, real usage analytics and a focused coding assistant into one fast, private workspace — with your conversations stored on your own device.",
   githubUrl: "https://github.com/SakshamOmer01/nexa-ai",
   apiDocsUrl: `${apiOrigin}/docs`,
   nav: [
-    { label: "Architecture", href: "#architecture" },
-    { label: "Stack", href: "#stack" },
-    { label: "Layout", href: "#layout" },
+    { label: "Product", href: "#product" },
+    { label: "Capabilities", href: "#capabilities" },
+    { label: "Platform", href: "#stack" },
     { label: "Status", href: "#status" },
   ],
 } as const;
+
+/** Workspace navigation shared by the sidebar and the dashboard quick links. */
+export const workspaceNav = [
+  { label: "Chat", description: "Ask, draft and reason", href: "/chat", icon: "chat" },
+  { label: "Coding Assistant", description: "Build and debug faster", href: "/code", icon: "code" },
+  { label: "Documents", description: "Your searchable library", href: "/documents", icon: "documents" },
+  { label: "Data Analytics", description: "What you actually use", href: "/analytics", icon: "analytics" },
+] as const;
+
+export const accountNav = [
+  { label: "Overview", href: "/dashboard", icon: "overview" },
+  { label: "Settings", href: "/settings", icon: "settings" },
+  { label: "Profile", href: "/profile", icon: "profile" },
+] as const;
+
+export type WorkspaceNavIcon = (typeof workspaceNav)[number]["icon"];
+export type AccountNavIcon = (typeof accountNav)[number]["icon"];
 
 export type StackIcon = "layers" | "server" | "database" | "boxes";
 

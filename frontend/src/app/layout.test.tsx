@@ -12,7 +12,7 @@ vi.mock("next/font/google", () => ({
 }));
 
 describe("RootLayout", () => {
-  it("renders a dark, full-height document that carries both font variables", () => {
+  it("renders a light-first document that carries both font variables and the theme script", () => {
     // Static markup avoids mounting a second <html> inside the test container's <div>.
     const html = renderToStaticMarkup(
       <RootLayout params={Promise.resolve({})}>
@@ -21,9 +21,11 @@ describe("RootLayout", () => {
     );
 
     expect(html).toContain('lang="en"');
-    expect(html).toContain("dark --font-geist-sans --font-geist-mono");
-    expect(html).toContain("h-full antialiased");
-    expect(html).toContain('<body class="flex min-h-full flex-col bg-background text-foreground">');
+    expect(html).toContain("--font-geist-sans --font-geist-mono");
+    expect(html).not.toContain('class="dark ');
+    // The inline script reads the stored/system preference before the first paint.
+    expect(html).toContain("nexa-theme");
+    expect(html).toContain("h-full");
     expect(html).toContain("<main>page content</main>");
   });
 
@@ -40,10 +42,16 @@ describe("RootLayout", () => {
       siteName: siteConfig.name,
     });
     expect(metadata.twitter).toMatchObject({ card: "summary_large_image" });
-    expect(metadata.keywords).toContain("PostgreSQL");
+    expect(metadata.keywords).toContain("AI assistant");
   });
 
-  it("pins the viewport to the dark colour scheme", () => {
-    expect(viewport).toEqual({ themeColor: "#0a0a0a", colorScheme: "dark" });
+  it("advertises both colour schemes", () => {
+    expect(viewport).toEqual({
+      themeColor: [
+        { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+        { media: "(prefers-color-scheme: dark)", color: "#12131a" },
+      ],
+      colorScheme: "light dark",
+    });
   });
 });

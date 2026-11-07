@@ -17,11 +17,21 @@ import type { AuthTokenResponse } from "@/types/api";
  * cookies lets the next navigation recover, and an invalid refresh token is harmless.
  */
 
-const PROTECTED_PREFIX = "/dashboard";
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/chat",
+  "/code",
+  "/documents",
+  "/analytics",
+  "/settings",
+  "/profile",
+];
 const REFRESH_TIMEOUT_MS = 3_000;
 
 function isProtected(pathname: string): boolean {
-  return pathname === PROTECTED_PREFIX || pathname.startsWith(`${PROTECTED_PREFIX}/`);
+  return PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 async function rotateSession(refreshToken: string): Promise<AuthTokenResponse | null> {

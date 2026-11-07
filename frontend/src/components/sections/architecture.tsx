@@ -75,7 +75,7 @@ export function Architecture() {
                 className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-4 py-3.5"
               >
                 {item.status === "shipped" ? (
-                  <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-400" aria-hidden />
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
                 ) : (
                   <CircleDashed
                     className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"

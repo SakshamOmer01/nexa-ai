@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { siteConfig } from "@/config/site";
+import { themeInitScript } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -23,7 +24,14 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   applicationName: siteConfig.name,
-  keywords: ["Nexa AI", "AI platform", "Next.js", "FastAPI", "PostgreSQL", "monorepo"],
+  keywords: [
+    "Nexa AI",
+    "AI assistant",
+    "AI chat",
+    "document analysis",
+    "coding assistant",
+    "AI analytics",
+  ],
   openGraph: {
     type: "website",
     url: siteConfig.url,
@@ -39,17 +47,27 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#12131a" },
+  ],
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">{children}</body>
+      <head>
+        {/* Applies the stored/system theme before paint; see src/lib/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="flex min-h-full flex-col bg-background text-foreground antialiased">
+        {children}
+      </body>
     </html>
   );
 }

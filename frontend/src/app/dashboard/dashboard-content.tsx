@@ -1,4 +1,13 @@
-import { ArrowLeft, KeyRound, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Code2,
+  FileText,
+  KeyRound,
+  MessagesSquare,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -42,15 +51,74 @@ export async function DashboardContent() {
         </div>
         <Badge
           variant="outline"
-          className="border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
         >
-          <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden />
+          <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden />
           Authenticated
         </Badge>
       </header>
 
+      <section aria-labelledby="workspace-links" className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="workspace-links" className="text-sm font-semibold">
+            Your workspace
+          </h2>
+          <Link href="/chat" className="text-xs font-medium text-primary hover:underline">
+            Open assistant
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            {
+              href: "/chat",
+              icon: MessagesSquare,
+              title: "AI chat",
+              description: "Ask, draft and iterate with attachments and voice.",
+            },
+            {
+              href: "/documents",
+              icon: FileText,
+              title: "Documents",
+              description: "Keep reference files ready to attach as context.",
+            },
+            {
+              href: "/analytics",
+              icon: BarChart3,
+              title: "Analytics",
+              description: "See the real usage behind your workspace.",
+            },
+            {
+              href: "/code",
+              icon: Code2,
+              title: "Coding assistant",
+              description: "A focused mode for implementation and review.",
+            },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group flex items-start gap-3 rounded-xl border border-border/70 bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-sm focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <item.icon className="size-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold">{item.title}</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  {item.description}
+                </span>
+              </span>
+              <ArrowRight
+                className="mt-1 size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+                aria-hidden
+              />
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-border/70 bg-card/60">
+        <Card className="border-border/70 bg-card">
           <CardHeader className="border-b border-border/60">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ShieldCheck className="size-4 text-primary" aria-hidden />
@@ -84,7 +152,7 @@ export async function DashboardContent() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 bg-card/60">
+        <Card className="border-border/70 bg-card">
           <CardHeader className="border-b border-border/60">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <KeyRound className="size-4 text-primary" aria-hidden />

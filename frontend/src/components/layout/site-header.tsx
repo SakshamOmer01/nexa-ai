@@ -1,26 +1,19 @@
-import { GitBranch } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { AuthNav } from "@/components/auth/auth-nav";
-import { Badge } from "@/components/ui/badge";
+import { NexaWordmark } from "@/components/brand/nexa-mark";
+import { SiteHeaderMobileActions } from "@/components/layout/site-header-actions";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/config/site";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
-        <Link href="/" className="flex items-center gap-3" aria-label={`${siteConfig.name} home`}>
-          <span className="relative flex size-8 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
-            <span className="size-3 rounded-[3px] bg-primary" aria-hidden />
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight">{siteConfig.name}</span>
-            <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">
-              v{siteConfig.version}
-            </Badge>
-          </span>
+    <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+        <Link href="/" aria-label={`${siteConfig.name} home`} className="rounded-lg">
+          <NexaWordmark />
         </Link>
 
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
@@ -28,35 +21,31 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
             >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <SiteHeaderMobileActions />
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="hidden text-muted-foreground lg:inline-flex"
+          >
+            <Link href={siteConfig.apiDocsUrl} target="_blank" rel="noreferrer">
+              API docs
+              <ArrowUpRight aria-hidden />
+            </Link>
+          </Button>
           <Suspense
-            fallback={
-              <span
-                className="h-7 w-28 animate-pulse rounded-md bg-muted/60"
-                aria-hidden
-              />
-            }
+            fallback={<span className="h-7 w-32 animate-pulse rounded-md bg-muted/70" aria-hidden />}
           >
             <AuthNav />
           </Suspense>
-          <Button variant="ghost" size="sm" asChild className="hidden lg:inline-flex">
-            <Link href={siteConfig.apiDocsUrl} target="_blank" rel="noreferrer">
-              API docs
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={siteConfig.githubUrl} target="_blank" rel="noreferrer">
-              <GitBranch aria-hidden />
-              <span className="hidden sm:inline">GitHub</span>
-            </Link>
-          </Button>
         </div>
       </div>
     </header>

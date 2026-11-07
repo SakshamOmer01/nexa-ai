@@ -29,7 +29,7 @@ describe("AuthNav", () => {
     await renderNav(null);
 
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
-    expect(screen.getByRole("link", { name: "Create account" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Get started" })).toHaveAttribute(
       "href",
       "/signup",
     );
@@ -42,6 +42,10 @@ describe("AuthNav", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
       "href",
       "/dashboard",
+    );
+    expect(screen.getByRole("link", { name: "Open workspace" })).toHaveAttribute(
+      "href",
+      "/chat",
     );
     // The email is truncated by CSS, so the full address stays in the title attribute.
     expect(screen.getByText(user.email)).toHaveAttribute("title", user.email);
