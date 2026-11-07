@@ -19,8 +19,8 @@ export async function AuthNav() {
         <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
           <Link href="/login">Sign in</Link>
         </Button>
-        <Button size="sm" asChild>
-          <Link href="/signup">Create account</Link>
+        <Button size="sm" asChild className="rounded-full px-4">
+          <Link href="/signup">Get started</Link>
         </Button>
       </>
     );
@@ -28,11 +28,14 @@ export async function AuthNav() {
 
   return (
     <>
-      <Button variant="ghost" size="sm" asChild>
+      <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
         <Link href="/dashboard">Dashboard</Link>
       </Button>
+      <Button size="sm" asChild className="rounded-full px-4">
+        <Link href="/chat">Open workspace</Link>
+      </Button>
       <span
-        className="hidden max-w-40 truncate text-xs text-muted-foreground md:inline"
+        className="hidden max-w-40 truncate text-xs text-muted-foreground xl:inline"
         title={user.email}
       >
         {user.email}

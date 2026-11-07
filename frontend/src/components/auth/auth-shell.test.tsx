@@ -36,7 +36,8 @@ describe("AuthShell", () => {
     expect(within(main).getByRole("heading", { level: 1 })).toHaveTextContent("Welcome back");
     expect(within(main).getByText("Sign in to reach your workspace.")).toBeInTheDocument();
     expect(within(main).getByText("credential form")).toBeInTheDocument();
-    expect(within(main).getByText("Secure accounts")).toBeInTheDocument();
+    // The badge is duplicated for mobile and desktop layouts; both sit inside the main landmark.
+    expect(within(main).getAllByText("Secure accounts").length).toBeGreaterThan(0);
     expect(within(main).getByText("No account yet?")).toBeInTheDocument();
   });
 });

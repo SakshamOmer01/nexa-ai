@@ -11,13 +11,13 @@ vi.mock("@/components/auth/auth-nav", () => ({
 }));
 
 describe("SiteHeader", () => {
-  it("renders the brand, version badge and every configured nav link", () => {
+  it("renders the original brand and every configured nav link", () => {
     render(<SiteHeader />);
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
     const home = screen.getByRole("link", { name: `${siteConfig.name} home` });
     expect(home).toHaveAttribute("href", "/");
-    expect(screen.getByText(`v${siteConfig.version}`)).toBeInTheDocument();
+    expect(screen.getByLabelText("Nexa AI")).toBeInTheDocument();
 
     const primaryNav = screen.getByRole("navigation", { name: "Primary" });
     for (const item of siteConfig.nav) {
@@ -28,23 +28,20 @@ describe("SiteHeader", () => {
     }
   });
 
-  it("renders the auth slot inside the header", () => {
+  it("renders the auth slot, theme control and mobile navigation", () => {
     render(<SiteHeader />);
 
     expect(screen.getByTestId("auth-nav")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Switch to dark mode/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open navigation" })).toBeInTheDocument();
   });
 
-  it("opens the API docs and repository in a new tab without a referrer", () => {
+  it("opens the API docs in a new tab without a referrer", () => {
     render(<SiteHeader />);
 
     const apiDocs = screen.getByRole("link", { name: "API docs" });
     expect(apiDocs).toHaveAttribute("href", siteConfig.apiDocsUrl);
     expect(apiDocs).toHaveAttribute("target", "_blank");
     expect(apiDocs).toHaveAttribute("rel", "noreferrer");
-
-    const github = screen.getByRole("link", { name: "GitHub" });
-    expect(github).toHaveAttribute("href", siteConfig.githubUrl);
-    expect(github).toHaveAttribute("target", "_blank");
-    expect(github).toHaveAttribute("rel", "noreferrer");
   });
 });

@@ -13,8 +13,8 @@ type CheckState =
   | { phase: "error"; message: string };
 
 const STATUS_DOT: Record<string, string> = {
-  up: "bg-emerald-400 shadow-[0_0_8px] shadow-emerald-400/70",
-  down: "bg-red-400 shadow-[0_0_8px] shadow-red-400/70",
+  up: "bg-emerald-500 shadow-[0_0_8px] shadow-emerald-500/50",
+  down: "bg-destructive shadow-[0_0_8px] shadow-destructive/50",
   pending: "bg-amber-400/70",
 };
 
@@ -29,7 +29,7 @@ function StatusRow({ name, status, latencyMs }: { name: string; status: string; 
         {typeof latencyMs === "number" ? (
           <span className="font-mono text-muted-foreground">{latencyMs}ms</span>
         ) : null}
-        <span className={status === "down" ? "font-medium text-red-400" : status === "up" ? "font-medium text-emerald-400" : "text-muted-foreground"}>
+        <span className={status === "down" ? "font-medium text-destructive" : status === "up" ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}>
           {status === "pending" ? "checking" : status}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function HealthStatusPanel() {
   const overall = state.phase === "ready" ? state.health.status : state.phase === "error" ? "unreachable" : "checking";
 
   return (
-    <Card className="w-full gap-0 border-border/70 bg-card/60 py-0 shadow-2xl shadow-black/20 backdrop-blur">
+    <Card className="w-full gap-0 border-border/70 bg-card py-0 shadow-glow backdrop-blur">
       <CardHeader className="border-b border-border/60 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
